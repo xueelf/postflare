@@ -6,12 +6,16 @@
   "author": "Yuki <admin@yuki.sh>",
   "type": "module",
   "scripts": {
-    "format": "prettier \"**/*.{json,md,ts,yaml,yml}\" --write --experimental-cli",
-    "format:check": "prettier \"**/*.{json,md,ts,yaml,yml}\" --check --experimental-cli",
+    "format": "prettier \"**/*.{json,md,ts,tsx,yaml,yml}\" --write --experimental-cli",
+    "format:check": "prettier \"**/*.{json,md,ts,tsx,yaml,yml}\" --check --experimental-cli",
     "lint": "eslint --cache",
     "lint:fix": "eslint --fix --cache",
     "prepare": "husky",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
@@ -19,11 +23,13 @@
     "@commitlint/types": "^21.2.0",
     "@eslint/js": "^10.0.1",
     "@types/bun": "^1.4.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "eslint": "^10.11.0",
     "husky": "^9.1.7",
     "prettier": "^3.9.8",
     "prettier-plugin-sort": "^1.1.2",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.70.1"
   },
   "devEngines": {
