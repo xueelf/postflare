@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "jsx": "react-jsx",
+    "moduleDetection": "force",
+
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "paths": {
+      "~/*": ["./*"],
+      "#/*": ["./src/*"]
+    },
+    "types": ["bun"],
+
+    "noEmit": true,
+    "outDir": "dist",
+
+    "verbatimModuleSyntax": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    "skipLibCheck": true
+  },
+  "include": ["*.config.ts", "src", "tests"]
+}
