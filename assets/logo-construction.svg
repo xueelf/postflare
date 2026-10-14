@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-28 -28 184 184" role="img" aria-labelledby="title desc">
+<title id="title">Postflare: geometric construction</title>
+<desc id="desc">纸飞机与火花。机头 N 与折点 F 位于 45° 轴上，轴是内容框的对角线。尾圆以 F 为圆心，半径是 NF 的一半。尾部凹口的两条边是尾圆的两条半径，夹角 120°，端点即翼尖 A、B。机翼的两条边从 N 连到 A、B，是机头圆的半径，机头圆以 N 为圆心并经过 A、B。火花由四段 90° 圆弧组成，圆弧半径等于火花半宽，四个圆心位于火花中心的对角线上。内容边距为 16。</desc>
+<style>
+  :root { color-scheme: light dark; }
+  .background { fill: #fff; }
+  .guide { stroke: #8a94a5; }
+  .outline { stroke: #2f6be4; }
+  .shape { fill: #2f6be4; fill-opacity: .16; }
+  .contact { fill: #a84910; }
+  .label { fill: #354154; font-family: ui-sans-serif, system-ui, sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    .background { fill: #191b21; }
+    .guide { stroke: #8993a3; }
+    .outline { stroke: #6f9dff; }
+    .shape { fill: #6f9dff; fill-opacity: .18; }
+    .contact { fill: #f4aa72; }
+    .label { fill: #e5e9f1; }
+  }
+</style>
+<rect class="background" x="-28" y="-28" width="184" height="184"/>
+<g class="guide" fill="none" stroke-width=".4">
+<rect x="16" y="16" width="96" height="96" stroke-dasharray="2 2.5"/>
+<path d="M12 116 116 12"/>
+<circle cx="112" cy="16" r="106.7131"/>
+<circle cx="54.9594" cy="73.0406" r="40.3338"/>
+<circle cx="48" cy="16" r="16"/>
+<circle cx="48" cy="48" r="16"/>
+<circle cx="16" cy="48" r="16"/>
+<circle cx="16" cy="16" r="16"/>
+</g>
+<g class="shape">
+<path d="M112 16 L16 62.6014 L54.9594 73.0406 L65.3986 112 Z"/>
+<path d="M32 16 A16 16 0 0 0 48 32 A16 16 0 0 0 32 48 A16 16 0 0 0 16 32 A16 16 0 0 0 32 16 Z"/>
+</g>
+<g class="outline" fill="none" stroke-width=".5">
+<path d="M112 16 L16 62.6014 L54.9594 73.0406 L65.3986 112 Z"/>
+<path d="M32 16 A16 16 0 0 0 48 32 A16 16 0 0 0 32 48 A16 16 0 0 0 16 32 A16 16 0 0 0 32 16 Z"/>
+</g>
+<g class="guide" fill="none" stroke-width=".6">
+M110 16h4 M112 14v4 M52.9594 73.0406h4 M54.9594 71.0406v4 M30 32h4 M32 30v4
+</g>
+<circle class="contact" cx="16" cy="62.6014" r="1.1"/>
+<circle class="contact" cx="65.3986" cy="112" r="1.1"/>
+<text class="label" x="116" y="13" font-size="7">N</text>
+<text class="label" x="49.9594" y="79.5406" font-size="7" text-anchor="end">F</text>
+<text class="label" x="26.5" y="29.5" font-size="7" text-anchor="end">S</text>
+<text class="label" x="11.5" y="67.1014" font-size="7" text-anchor="end">A</text>
+<text class="label" x="69.8986" y="117.5" font-size="7">B</text>
+</svg>
