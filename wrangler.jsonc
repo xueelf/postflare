@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "postflare",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-10-13",
+  "vars": {
+    /*
+     * The domain you send and receive mail on.
+     * The Deploy to Cloudflare form asks for it.
+     * Local development can override it in .dev.vars.
+     */
+    "MAIL_DOMAIN": "example.com",
+  },
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+  },
+  "triggers": {
+    "crons": ["0 16 * * *"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "postflare",
+      /*
+       * Filled in by the Deploy to Cloudflare form.
+       * For a manual deploy, run `wrangler d1 create postflare`.
+       * Put the printed id here.
+       * Not needed for local development.
+       */
+      "database_id": "<DATABASE_ID>",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS",
+      "bucket_name": "postflare-attachments",
+    },
+  ],
+  "send_email": [{ "name": "EMAIL", "remote": true }],
+}

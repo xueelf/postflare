@@ -1,17 +1,14 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "lib": ["ESNext"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "moduleDetection": "force",
 
     "module": "Preserve",
     "moduleResolution": "bundler",
-    "paths": {
-      "~/*": ["./*"],
-      "#/*": ["./src/*"]
-    },
     "types": ["bun"],
+    "resolveJsonModule": true,
 
     "noEmit": true,
     "outDir": "dist",
@@ -24,5 +21,5 @@
 
     "skipLibCheck": true
   },
-  "include": ["*.config.ts", "src", "tests"]
+  "include": ["*.config.ts", "src", "tests", "types"]
 }
