@@ -1,4 +1,8 @@
 .DS_Store
 .eslintcache
+.wrangler/
 dist/
 node_modules/
+.dev.vars
+.env
+worker-configuration.d.ts
