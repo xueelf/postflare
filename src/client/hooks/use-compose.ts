@@ -4,6 +4,7 @@ import type { NavigateFunction } from 'react-router';
 import { apiFetch, IMAGE_MAX_BYTES } from '../api';
 import { useToast } from '../components/toast';
 import { dateTimeValue, formatTime, textToHtml } from '../format';
+import { useI18n } from '../i18n';
 import { type MailRoute, viewPath } from '../route';
 
 import type { MessageDetail } from './use-messages';
@@ -29,6 +30,7 @@ export interface ComposeDeps {
  */
 export function useCompose(route: MailRoute, deps: ComposeDeps) {
   const { navigate, closeDrawer, openMessage, refreshList } = deps;
+  const { locale, t } = useI18n();
 
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
@@ -64,11 +66,11 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
   let composeStatus = '';
 
   if (draftError) {
-    composeStatus = '保存失败';
+    composeStatus = t('compose.saveFailed');
   } else if (draftBusy || (!draftSaved && !composeEmpty)) {
-    composeStatus = '正在保存…';
+    composeStatus = t('compose.saving');
   } else if (draftSaved) {
-    composeStatus = `已保存 ${savedAt}`;
+    composeStatus = t('compose.saved', { time: savedAt });
   }
 
   const resetCompose = () => {
@@ -111,7 +113,10 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
       text: openMessage.body_text ?? '',
       html: draftHtml,
     });
-    setSavedAt(formatTime(new Date(dateTimeValue(openMessage.updated_at))));
+
+    setSavedAt(
+      formatTime(new Date(dateTimeValue(openMessage.updated_at)), locale),
+    );
   }, [route.compose, route.view, openMessage]);
 
   // 关闭写信弹窗时清空编辑状态
@@ -155,7 +160,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         if (!res.ok) {
           const data = (await res.json()) as { error?: string };
 
-          setDraftError(data.error ?? '保存失败');
+          setDraftError(data.error ?? t('compose.saveFailed'));
           setDraftBusy(false);
 
           return null;
@@ -164,14 +169,14 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
 
         setDraftId(data.id);
         setSavedCompose(snapshot);
-        setSavedAt(formatTime(new Date()));
+        setSavedAt(formatTime(new Date(), locale));
         setDraftBusy(false);
         refreshList();
 
         return data.id;
       })
       .catch(() => {
-        setDraftError('保存失败');
+        setDraftError(t('compose.saveFailed'));
         setDraftBusy(false);
 
         return null;
@@ -186,7 +191,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
   // 正文内联图片：先确保草稿存在，再上传到 R2 并返回应用地址
   const uploadImage = async (file: File, html: string): Promise<string> => {
     if (file.size > IMAGE_MAX_BYTES) {
-      toast.error('图片太大（上限 10MB），请压缩后再试');
+      toast.error(t('compose.imageTooLarge'));
 
       throw new Error('file too large');
     }
@@ -197,7 +202,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
     }
 
     if (!id) {
-      toast.error('图片上传失败，请重试');
+      toast.error(t('compose.imageUploadFailed'));
 
       throw new Error('draft not saved');
     }
@@ -212,7 +217,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
     }).catch(() => null);
 
     if (!res || !res.ok) {
-      toast.error('图片上传失败，请重试');
+      toast.error(t('compose.imageUploadFailed'));
 
       throw new Error('upload failed');
     }
@@ -271,7 +276,9 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         if (!res.ok) {
           const data = (await res.json()) as { error?: string };
 
-          toast.error(data.error ?? `发送失败（${res.status}）`);
+          toast.error(
+            data.error ?? t('compose.sendFailedStatus', { status: res.status }),
+          );
           setComposeBusy(false);
 
           return;
@@ -284,7 +291,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         navigate(`/sent/${data.id}`);
       })
       .catch(() => {
-        toast.error('发送失败，请重试');
+        toast.error(t('compose.sendFailed'));
         setComposeBusy(false);
       });
   };

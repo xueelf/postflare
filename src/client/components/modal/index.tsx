@@ -1,6 +1,8 @@
 import { RiCloseLine } from '@remixicon/react';
 import { type ReactNode, useEffect, useRef } from 'react';
 
+import { useI18n } from '../../i18n';
+
 import './style.css';
 
 import { Button } from '../button';
@@ -15,8 +17,8 @@ export interface ModalProps {
 }
 
 /**
- * 模态弹窗：原生 dialog，头部为「居中标题 + 关闭」，底部为动作插槽。
- * 挂载期间保持打开：ESC、遮罩与关闭按钮统一走 onDismiss，浏览器原生关闭会被恢复。
+ * 模态弹窗基于原生 dialog，头部是居中标题与关闭按钮，底部是动作插槽。
+ * 挂载期间保持打开，ESC、遮罩与关闭按钮统一走 onDismiss，浏览器原生关闭会被恢复。
  */
 export function Modal({
   title,
@@ -25,6 +27,7 @@ export function Modal({
   footer,
   children,
 }: ModalProps) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
   const opened = useRef(false);
   const lastFocused = useRef<HTMLElement | null>(null);
@@ -46,8 +49,8 @@ export function Modal({
     return () => dialog.removeEventListener('focusin', handleFocusIn);
   }, []);
 
-  // 挂载期间保持打开：cancel 不可取消时浏览器会直接关闭（ESC 连按等），
-  // 这类关闭不经过 React，只能在每次渲染后检查并恢复，所以故意不写依赖数组
+  // 挂载期间保持打开，cancel 不可取消时浏览器会直接关闭（ESC 连按等），
+  // 这类关闭不经过 React，只能在每次渲染后检查并恢复，故意不写依赖数组
   useEffect(() => {
     const dialog = ref.current;
 
@@ -56,7 +59,7 @@ export function Modal({
     }
 
     if (!dialog.open) {
-      // 首次挂载正常打开；被浏览器原生关闭后，等上层弹窗关闭再恢复
+      // 首次挂载正常打开，被浏览器原生关闭后等上层弹窗关闭再恢复
       if (
         opened.current &&
         document.querySelectorAll('dialog[open]').length > 0
@@ -77,7 +80,7 @@ export function Modal({
     }
   });
 
-  // 关闭只由卸载触发，打开状态始终跟随界面状态；焦点不落到按钮等非输入元素上
+  // 关闭只由卸载触发，打开状态始终跟随界面状态，焦点不落到按钮等非输入元素上
   useEffect(() => {
     const dialog = ref.current;
 
@@ -120,7 +123,7 @@ export function Modal({
     >
       <DialogHead title={title}>
         {onDismiss && (
-          <Button variant="icon" onClick={onDismiss} aria-label="关闭">
+          <Button variant="icon" onClick={onDismiss} aria-label={t('ui.close')}>
             <RiCloseLine size={20} aria-hidden />
           </Button>
         )}

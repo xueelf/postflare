@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
 import { apiFetch } from '../api';
+import { useI18n } from '../i18n';
 import { type MailRoute, type View, MAILBOX_VIEWS, viewPath } from '../route';
 
 import type { ConfirmRequest } from './use-confirm';
@@ -42,6 +43,7 @@ export function useMessages(
   ready: boolean,
   askConfirm: (request: ConfirmRequest) => void,
 ) {
+  const { t } = useI18n();
   const [search, setSearch] = useState(route.q);
   const query = useDebouncedValue(search.trim(), 300);
   const [listVersion, setListVersion] = useState(0);
@@ -84,7 +86,7 @@ export function useMessages(
     }
   }, [query, route.view, route.messageId, route.q]);
 
-  // 列表；请求作废由 AbortController 负责，避免旧响应覆盖新视图
+  // 列表请求由 AbortController 作废，避免旧响应覆盖新视图
   useEffect(() => {
     if (!ready || !MAILBOX_VIEWS.includes(route.view)) {
       return;
@@ -103,7 +105,7 @@ export function useMessages(
     return () => controller.abort();
   }, [ready, route.view, route.q, listVersion]);
 
-  // 打开的邮件由路由驱动；确认邮件存在且属于当前视图后再标记已读
+  // 打开的邮件由路由驱动，确认存在且属于当前视图后再标记已读
   useEffect(() => {
     if (!ready) {
       return;
@@ -176,9 +178,9 @@ export function useMessages(
 
   const discardDraft = (id: string) => {
     askConfirm({
-      title: '丢弃这份草稿？',
-      message: '丢弃后无法恢复。',
-      confirmText: '丢弃',
+      title: t('mail.discardTitle'),
+      message: t('mail.discardMessage'),
+      confirmText: t('mail.discard'),
       danger: true,
       action: () => {
         const next = neighborId(id);
@@ -213,9 +215,9 @@ export function useMessages(
 
   const purgeMessage = (id: string) => {
     askConfirm({
-      title: '永久删除这封邮件？',
-      message: '回收站中的邮件删除后无法恢复。',
-      confirmText: '永久删除',
+      title: t('mail.purgeTitle'),
+      message: t('mail.purgeMessage'),
+      confirmText: t('mail.purgeConfirm'),
       danger: true,
       action: () => {
         const next = neighborId(id);
@@ -231,12 +233,12 @@ export function useMessages(
   };
 
   const emptyMailbox = (mailbox: 'spam' | 'trash') => {
-    const label = mailbox === 'spam' ? '垃圾邮件' : '回收站';
+    const label = t(mailbox === 'spam' ? 'mail.spam' : 'mail.trash');
 
     askConfirm({
-      title: `清空${label}？`,
-      message: '其中的邮件将被永久删除。',
-      confirmText: '清空',
+      title: t('mail.emptyMailboxTitle', { mailbox: label }),
+      message: t('mail.emptyMailboxMessage'),
+      confirmText: t('mail.emptyMailbox'),
       danger: true,
       action: () => {
         apiFetch(`/api/messages?mailbox=${mailbox}`, { method: 'DELETE' })

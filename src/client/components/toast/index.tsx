@@ -15,6 +15,7 @@ import {
   useState,
 } from 'react';
 
+import { useI18n } from '../../i18n';
 import { Button } from '../button';
 
 import './style.css';
@@ -49,13 +50,14 @@ const ToastContext = createContext<ToastApi>({
 });
 
 /**
- * 全局提示：服务端与网络结果等非字段反馈，表单内只展示字段错误。
+ * 全局提示用于服务端与网络结果等非字段反馈，表单内只展示字段错误。
  */
 export function useToast() {
   return useContext(ToastContext);
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const region = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
@@ -92,7 +94,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [show],
   );
 
-  // 用 popover 提升到最上层：弹窗打开时提示也能看见
+  // 用 popover 提升到最上层，弹窗打开时提示也能看见
   useEffect(() => {
     const element = region.current;
 
@@ -116,7 +118,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         ref={region}
         className="toast-region"
         popover="manual"
-        aria-label="通知"
+        aria-label={t('ui.notifications')}
       >
         {toasts.map(item => {
           const Icon = VARIANT_ICONS[item.variant];
@@ -139,7 +141,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 variant="icon"
                 className="toast-close"
                 onClick={() => dismiss(item.id)}
-                aria-label="关闭"
+                aria-label={t('ui.close')}
               >
                 <RiCloseLine size={20} aria-hidden />
               </Button>

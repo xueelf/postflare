@@ -1,3 +1,5 @@
+import type { Locale } from '../locales';
+
 /**
  * 共享工具：显示格式化、内容转换与文件读取。
  */
@@ -7,11 +9,11 @@ function parseServerDate(value: string): Date {
   return new Date(`${value.replace(' ', 'T')}Z`);
 }
 
-export function formatDate(value: string): string {
-  return parseServerDate(value).toLocaleString();
+export function formatDate(value: string, locale: Locale): string {
+  return parseServerDate(value).toLocaleString(locale);
 }
 
-export function formatListDate(value: string): string {
+export function formatListDate(value: string, locale: Locale): string {
   const date = parseServerDate(value);
   const now = new Date();
   const sameDay =
@@ -20,21 +22,27 @@ export function formatListDate(value: string): string {
     date.getDate() === now.getDate();
 
   if (sameDay) {
-    return formatTime(date);
+    return formatTime(date, locale);
   }
 
   if (date.getFullYear() === now.getFullYear()) {
-    return date.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
+    return date.toLocaleDateString(locale, {
+      month: '2-digit',
+      day: '2-digit',
+    });
   }
-  return date.toLocaleDateString([], {
+  return date.toLocaleDateString(locale, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   });
 }
 
-export function formatTime(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+export function formatTime(date: Date, locale: Locale): string {
+  return date.toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function formatSize(bytes: number): string {
@@ -56,7 +64,7 @@ export function dateTimeValue(value: string): string {
 }
 
 /**
- * 纯文本转成编辑器 HTML（历史草稿与模板兼容）。
+ * 纯文本转成编辑器 HTML（兼容以纯文本保存的草稿与模板）。
  */
 export function textToHtml(text: string): string {
   return text
@@ -73,7 +81,7 @@ export function textToHtml(text: string): string {
 }
 
 /**
- * 模板正文：已是 HTML 的原样返回，历史纯文本转成 HTML。
+ * 模板正文：已是 HTML 的原样返回，纯文本保存的转成 HTML。
  */
 export function templateHtml(body: string): string {
   return /<[a-z][\s\S]*>/i.test(body) ? body : textToHtml(body);
@@ -81,8 +89,8 @@ export function templateHtml(body: string): string {
 
 /**
  * 邮件正文 iframe 包装：在 head 起始处注入基础样式。
- * iframe 固定白底，所以链接固定用浅色分支的 --accent-text（#2459c9），
- * 不跟随应用主题，否则深色主题的浅蓝在白底上对比度不足。
+ * iframe 固定白底，链接颜色固定取浅色分支的 --accent-text（#2459c9）而不跟随应用主题，
+ * 深色主题的浅蓝在白底上对比度不足。
  */
 export function emailHtml(body: string): string {
   const style = '<style>a{color:#2459c9}a:visited{color:#2459c9}</style>';
@@ -115,7 +123,7 @@ export function readAsDataUrl(blob: Blob): Promise<string> {
     const reader = new FileReader();
 
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('图片读取失败'));
+    reader.onerror = () => reject(new Error('failed to read the file'));
     reader.readAsDataURL(blob);
   });
 }

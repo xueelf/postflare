@@ -17,6 +17,7 @@ import {
   templateHtml,
 } from '../../format';
 import type { Template } from '../../hooks/use-templates';
+import { useI18n } from '../../i18n';
 
 export interface TemplatePreviewProps {
   template: Template | null;
@@ -36,10 +37,11 @@ export function TemplatePreview({
   onDelete,
   onBack,
 }: TemplatePreviewProps) {
+  const { locale, t } = useI18n();
   const accountName = displayName(user);
 
   return (
-    <section className="panel reader-pane" aria-label="模板预览">
+    <section className="panel reader-pane" aria-label={t('templates.preview')}>
       {template ? (
         <>
           <div className="reader-head">
@@ -47,7 +49,7 @@ export function TemplatePreview({
               variant="icon"
               className="reader-back"
               onClick={onBack}
-              aria-label="返回"
+              aria-label={t('templates.back')}
             >
               <RiArrowLeftLine size={20} aria-hidden />
             </Button>
@@ -56,12 +58,12 @@ export function TemplatePreview({
               className="reader-actions"
               items={[
                 {
-                  label: '编辑',
+                  label: t('templates.edit'),
                   icon: <RiEditLine size={20} aria-hidden />,
                   run: () => onEdit(template.id),
                 },
                 {
-                  label: '删除',
+                  label: t('templates.delete'),
                   icon: <RiDeleteBinLine size={20} aria-hidden />,
                   run: () => onDelete(template.id),
                 },
@@ -74,21 +76,21 @@ export function TemplatePreview({
               avatarName={accountName}
               correspondent={accountName}
               addr={user.email}
-              when={formatDate(template.updated_at)}
+              when={formatDate(template.updated_at, locale)}
               dateTime={dateTimeValue(template.updated_at)}
             >
               <iframe
                 className="body-html"
                 sandbox="allow-same-origin"
                 srcDoc={emailHtml(templateHtml(template.body_html))}
-                title="模板正文"
+                title={t('templates.body')}
               />
             </MessageView>
           </div>
         </>
       ) : (
         <EmptyState icon={<RiFileTextLine aria-hidden />}>
-          选择一个模板预览
+          {t('templates.selectHint')}
         </EmptyState>
       )}
     </section>

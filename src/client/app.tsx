@@ -19,6 +19,7 @@ import { useShell } from './hooks/use-shell';
 import { useTabFields } from './hooks/use-tab-fields';
 import { useTemplates } from './hooks/use-templates';
 import { useTheme } from './hooks/use-theme';
+import { initialLocale, LocaleProvider, matchLocale, useI18n } from './i18n';
 import { Layout } from './layout';
 import {
   type View,
@@ -38,9 +39,28 @@ import { TemplateDialog } from './views/templates/dialog';
 import { Users } from './views/users';
 
 /**
- * 应用根组件：连接路由与各领域状态 Hook。
+ * 应用根组件：解析界面语言并提供给下层。
  */
 export function App() {
+  const navigate = useNavigate();
+  const auth = useAuth(navigate);
+  // 未登录时按浏览器语言，登录后以账号设置为准
+  const locale = auth.auth?.user
+    ? matchLocale(auth.auth.user.language)
+    : initialLocale();
+
+  return (
+    <LocaleProvider locale={locale}>
+      <AppShell auth={auth} />
+    </LocaleProvider>
+  );
+}
+
+/**
+ * 应用主体：连接路由与各领域状态 Hook。
+ */
+function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
   const { view, messageId } = parseRoute(location.pathname);
@@ -56,7 +76,6 @@ export function App() {
   };
 
   const confirm = useConfirm();
-  const auth = useAuth(navigate);
   const shell = useShell();
   const ready = !!auth.auth?.user;
   const messages = useMessages(route, navigate, ready, confirm.askConfirm);
@@ -82,19 +101,19 @@ export function App() {
           {auth.authError ? (
             <>
               <Notice role="alert">
-                <strong>无法连接服务器</strong>
-                <span>请检查网络后重试。</span>
+                <strong>{t('app.connectFailed')}</strong>
+                <span>{t('app.connectFailedHint')}</span>
               </Notice>
               <Button
                 variant="primary"
                 className="auth-submit"
                 onClick={auth.reloadAuth}
               >
-                重试
+                {t('common.retry')}
               </Button>
             </>
           ) : (
-            <p className="meta">加载中…</p>
+            <p className="meta">{t('common.loading')}</p>
           )}
         </div>
       </div>
@@ -148,16 +167,17 @@ export function App() {
   const openMenu = () => shell.setDrawerOpen(true);
   const readerOpen = messageId !== null;
 
-  const emptyText =
+  const emptyText = t(
     view === 'spam'
-      ? '没有垃圾邮件'
+      ? 'app.emptySpam'
       : view === 'trash'
-        ? '回收站是空的'
+        ? 'app.emptyTrash'
         : view === 'drafts'
-          ? '没有草稿'
-          : '没有找到邮件';
+          ? 'app.emptyDrafts'
+          : 'app.emptySearch',
+  );
 
-  // 关闭阅读器与弹窗：打开时压过历史栈的回退，直接刷新进来的用 replace
+  // 关闭阅读器与弹窗：应用内打开的按历史回退，直接刷新进入的用 replace 跳转
   const closeOverlay = (flag: string, fallback: string) => {
     if (location.state?.[flag]) {
       navigate(-1);
@@ -311,7 +331,9 @@ export function App() {
       {panel}
       {compose.composing && (
         <Compose
-          title={view === 'drafts' && messageId ? '编辑草稿' : '新邮件'}
+          title={t(
+            view === 'drafts' && messageId ? 'app.editDraft' : 'app.newMessage',
+          )}
           to={compose.composeTo}
           subject={compose.composeSubject}
           text={compose.composeText}
@@ -369,7 +391,7 @@ export function App() {
 }
 
 /**
- * 文件夹路由：校验 mailbox 参数，无效时归一化回收件箱。
+ * 文件夹路由：校验 mailbox 参数，无效时回落到收件箱。
  */
 function MailboxRoute({ mail }: { mail: Omit<MailProps, 'view'> }) {
   const { mailbox } = useParams();

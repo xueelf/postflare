@@ -5,6 +5,7 @@ import { ListHead } from '../../components/list-head';
 import { ListRow } from '../../components/list-row';
 import { dateTimeValue, formatListDate } from '../../format';
 import type { MessageSummary } from '../../hooks/use-messages';
+import { type MessageKey, type MessageParams, useI18n } from '../../i18n';
 import type { View } from '../../route';
 
 export interface MessageListProps {
@@ -23,10 +24,15 @@ export interface MessageListProps {
   onLogout: () => void;
 }
 
-function correspondent(message: MessageSummary): string {
+function correspondent(
+  message: MessageSummary,
+  t: (key: MessageKey, params?: MessageParams) => string,
+): string {
   return message.direction === 'inbound'
     ? message.from_name || message.from_address
-    : `发给 ${message.to_address || '(无收件人)'}`;
+    : t('mail.sentTo', {
+        address: message.to_address || t('mail.noRecipient'),
+      });
 }
 
 /**
@@ -47,15 +53,17 @@ export function MessageList({
   onCreateTemplate,
   onLogout,
 }: MessageListProps) {
+  const { locale, t } = useI18n();
+
   return (
-    <section className="panel list-pane" aria-label="邮件列表">
+    <section className="panel list-pane" aria-label={t('mail.list')}>
       <ListHead
         collapsed={collapsed}
         onToggleSidebar={onToggleSidebar}
         onMenu={onMenu}
         search={search}
         onSearch={onSearch}
-        searchPlaceholder="搜索邮件"
+        searchPlaceholder={t('mail.search')}
         accountMenuId="account-menu-mobile"
         user={user}
         onCreateTemplate={onCreateTemplate}
@@ -77,15 +85,15 @@ export function MessageList({
                 key={message.id}
                 selected={selected}
                 unread={unread}
-                title={correspondent(message)}
+                title={correspondent(message, t)}
                 subtitle={
                   message.direction === 'inbound' && message.from_name
                     ? message.from_address
                     : undefined
                 }
-                text={message.subject || '(无主题)'}
+                text={message.subject || t('mail.noSubject')}
                 dateTime={dateTimeValue(created)}
-                when={formatListDate(created)}
+                when={formatListDate(created, locale)}
                 onOpen={() => onOpen(message)}
               />
             );

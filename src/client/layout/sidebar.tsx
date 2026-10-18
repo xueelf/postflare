@@ -17,6 +17,7 @@ import { type ReactNode, Fragment } from 'react';
 import pkg from '../../../package.json';
 import { AccountMenu } from '../components/account-menu';
 import { Popover } from '../components/popover';
+import { type MessageKey, useI18n } from '../i18n';
 import type { View } from '../route';
 
 export interface SidebarProps {
@@ -35,7 +36,7 @@ export interface SidebarProps {
 const NAV_GROUPS: Array<
   Array<{
     view: View;
-    label: string;
+    labelKey: MessageKey;
     icon: ReactNode;
     count?: 'unread' | 'drafts' | 'spam_unread';
     ownerOnly?: boolean;
@@ -44,30 +45,42 @@ const NAV_GROUPS: Array<
   [
     {
       view: 'inbox',
-      label: '收件箱',
+      labelKey: 'sidebar.inbox',
       icon: <RiInboxLine size={20} />,
       count: 'unread',
     },
     {
       view: 'drafts',
-      label: '草稿',
+      labelKey: 'sidebar.drafts',
       icon: <RiDraftLine size={20} />,
       count: 'drafts',
     },
-    { view: 'sent', label: '已发送', icon: <RiSendPlaneLine size={20} /> },
+    {
+      view: 'sent',
+      labelKey: 'sidebar.sent',
+      icon: <RiSendPlaneLine size={20} />,
+    },
     {
       view: 'spam',
-      label: '垃圾邮件',
+      labelKey: 'sidebar.spam',
       icon: <RiMailForbidLine size={20} />,
       count: 'spam_unread',
     },
-    { view: 'trash', label: '回收站', icon: <RiDeleteBinLine size={20} /> },
+    {
+      view: 'trash',
+      labelKey: 'sidebar.trash',
+      icon: <RiDeleteBinLine size={20} />,
+    },
   ],
   [
-    { view: 'templates', label: '模板', icon: <RiFileTextLine size={20} /> },
+    {
+      view: 'templates',
+      labelKey: 'sidebar.templates',
+      icon: <RiFileTextLine size={20} />,
+    },
     {
       view: 'users',
-      label: '用户',
+      labelKey: 'sidebar.users',
       icon: <RiGroupLine size={20} />,
       ownerOnly: true,
     },
@@ -75,7 +88,7 @@ const NAV_GROUPS: Array<
 ];
 
 /**
- * 侧栏：账户、写邮件、文件夹导航与帮助。
+ * 侧栏包含账户入口、写邮件按钮、文件夹导航与帮助。
  */
 export function Sidebar({
   collapsed,
@@ -89,6 +102,8 @@ export function Sidebar({
   onOpenSettings,
   onLogout,
 }: SidebarProps) {
+  const { t } = useI18n();
+
   return (
     <>
       <div className="sidebar-head">
@@ -104,15 +119,15 @@ export function Sidebar({
         type="button"
         className="compose"
         onClick={onCompose}
-        title={collapsed ? '写邮件' : undefined}
+        title={collapsed ? t('sidebar.compose') : undefined}
       >
         <span className="nav-icon">
           <RiEditLine size={20} aria-hidden />
         </span>
-        <span className="nav-label">写邮件</span>
+        <span className="nav-label">{t('sidebar.compose')}</span>
       </button>
 
-      <nav className="nav" aria-label="文件夹">
+      <nav className="nav" aria-label={t('sidebar.folders')}>
         {NAV_GROUPS.map((group, index) => (
           <Fragment key={index}>
             {index > 0 && <hr className="nav-divider" />}
@@ -128,7 +143,7 @@ export function Sidebar({
                         type="button"
                         className={view === item.view ? 'active' : undefined}
                         onClick={() => onNavigate(item.view)}
-                        title={collapsed ? item.label : undefined}
+                        title={collapsed ? t(item.labelKey) : undefined}
                       >
                         <span className="nav-icon">
                           {item.icon}
@@ -136,7 +151,7 @@ export function Sidebar({
                             <span className="dot-badge" aria-hidden="true" />
                           )}
                         </span>
-                        <span className="nav-label">{item.label}</span>
+                        <span className="nav-label">{t(item.labelKey)}</span>
                         {count > 0 && <small className="badge">{count}</small>}
                       </button>
                     </li>
@@ -153,12 +168,12 @@ export function Sidebar({
               type="button"
               className={settingsOpen ? 'active' : undefined}
               onClick={onOpenSettings}
-              title={collapsed ? '设置' : undefined}
+              title={collapsed ? t('sidebar.settings') : undefined}
             >
               <span className="nav-icon">
                 <RiSettings3Line size={20} aria-hidden />
               </span>
-              <span className="nav-label">设置</span>
+              <span className="nav-label">{t('sidebar.settings')}</span>
             </button>
           </li>
         </ul>
@@ -170,15 +185,15 @@ export function Sidebar({
           <li>
             <Popover
               id="help-menu"
-              triggerLabel="帮助"
-              triggerTitle={collapsed ? '帮助' : undefined}
+              triggerLabel={t('sidebar.help')}
+              triggerTitle={collapsed ? t('sidebar.help') : undefined}
               side="top"
               trigger={
                 <>
                   <span className="nav-icon">
                     <RiQuestionLine size={20} aria-hidden />
                   </span>
-                  <span className="nav-label">帮助</span>
+                  <span className="nav-label">{t('sidebar.help')}</span>
                 </>
               }
             >
@@ -189,7 +204,7 @@ export function Sidebar({
                 rel="noreferrer"
               >
                 <RiGithubLine size={20} aria-hidden />
-                <span>项目仓库</span>
+                <span>{t('sidebar.repository')}</span>
               </a>
               <a
                 className="popover-item"
@@ -198,7 +213,7 @@ export function Sidebar({
                 rel="noreferrer"
               >
                 <RiBugLine size={20} aria-hidden />
-                <span>问题反馈</span>
+                <span>{t('sidebar.issues')}</span>
               </a>
               <div className="popover-note help-menu-version">
                 v{pkg.version}
