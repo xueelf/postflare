@@ -21,7 +21,21 @@ Before the app can send and receive mail, finish these settings in the Cloudflar
 1. **[Email Routing](https://developers.cloudflare.com/email-routing/)**: enable it for your domain and add a catch-all rule pointing at this Worker
 2. **[Email Sending](https://developers.cloudflare.com/email-service/)**: onboard the domain
 
-Then open the deployed URL. The setup wizard checks the domain's receiving and sending readiness and creates the owner account; more accounts are created from the Users page.
+Then open the deployed URL. The setup wizard checks the domain's receiving and sending readiness and creates the owner account. More accounts are created from the Users page.
+
+## Interface language
+
+Postflare supports multiple languages, the same nine as Cloudflare:
+
+- Deutsch
+- English
+- Español
+- Français
+- Italiano
+- Português
+- 한국어
+- 日本語
+- 中文
 
 ## Local development
 
@@ -71,4 +85,4 @@ scripts/         Shared asset generation
 | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | No incoming mail                           | Apex MX must point at Cloudflare Email Routing, and the catch-all must point at this Worker |
 | No outgoing mail                           | Onboard the domain under Email Service, and make sure the account has a Workers paid plan   |
-| The wizard reports the domain is not ready | The DNS records have not taken effect yet; wait a few minutes and retry                     |
+| The wizard reports the domain is not ready | The DNS records have not taken effect yet. Wait a few minutes and retry                     |
