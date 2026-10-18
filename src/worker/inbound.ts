@@ -2,7 +2,7 @@ import PostalMime from 'postal-mime';
 
 import { purgeMessages } from './messages';
 
-// D1 单行上限 2MB：正文超限时按字节截断，完整内容仍在 R2
+// D1 单行上限 2MB，正文超限时按字节截断，完整原文仍在 R2
 export const BODY_MAX_BYTES = 900_000;
 
 export async function handleInbound(
@@ -22,7 +22,7 @@ export async function handleInbound(
     return;
   }
 
-  // workers-types and the DOM lib declare different ReadableStream types; identical at runtime
+  // workers-types 与 DOM 库声明的 ReadableStream 类型不同，运行时一致
   const raw = await new Response(
     message.raw as unknown as BodyInit,
   ).arrayBuffer();
@@ -32,7 +32,7 @@ export async function handleInbound(
 
   const parsed = await PostalMime.parse(raw);
 
-  // 按 Message-ID 去重：重复投递直接丢弃，不再写 R2
+  // 按 Message-ID 去重，重复投递直接丢弃，不再写 R2
   const inserted = await env.DB.prepare(
     `INSERT INTO messages (
       id, user_id, mailbox, direction, from_address, from_name, to_address, subject,
@@ -47,8 +47,8 @@ export async function handleInbound(
       (parsed.from?.name ?? '').trim(),
       message.to,
       parsed.subject ?? '',
-      capBody(parsed.text ?? null, '（正文过长，已截断）'),
-      capBody(parsed.html ?? null, '<p>（正文过长，已截断）</p>'),
+      capBody(parsed.text ?? null, '(message truncated)'),
+      capBody(parsed.html ?? null, '<p>(message truncated)</p>'),
       normalizeMessageId(parsed.messageId),
       normalizeMessageId(parsed.inReplyTo),
       parsed.references ?? null,
@@ -86,8 +86,7 @@ export async function handleInbound(
         .run();
     }
   } catch (error) {
-    // 附件没写完就把这封邮件撤掉：Message-ID 去重会让投递重试直接跳过，
-    // 否则这封邮件会永远缺附件
+    // 附件没写完就把这封邮件撤掉，否则 Message-ID 去重会让投递重试跳过，这封邮件永远缺附件
     await purgeMessages(env, [id]);
 
     throw error;
@@ -106,7 +105,7 @@ export function normalizeMessageId(
 }
 
 /**
- * 正文按字节上限截断（D1 单行 2MB），超限时补一句说明。
+ * 正文按字节上限截断，超限时补一句说明，避免超过 D1 单行上限。
  */
 export function capBody(value: string | null, notice: string): string | null {
   if (value === null) {
