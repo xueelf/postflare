@@ -1,0 +1,11 @@
+.avatar {
+  --avatar-size: 40px;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 650;
+}

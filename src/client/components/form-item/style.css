@@ -1,0 +1,99 @@
+.form-item {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.form-item:first-child {
+  margin-top: 0;
+}
+
+.form-item > label {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+.form-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.form-label > span:first-child {
+  flex: none;
+}
+
+.form-item input {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 标签右侧的参考值（如用户名对应的完整邮箱），与标签同一行右对齐 */
+.form-ref {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--faint);
+  text-align: right;
+}
+
+/* 标签与它的字段说明同组，问号紧挨标签，不参与左右分布 */
+.form-label-main {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 字段说明的点击区域就是图标本身，hover 反馈由 mouseenter 切换图标 */
+.form-help {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* select 关掉浏览器默认外观，base-select 的内部偏移会让文字与 input 对不齐 */
+.form-item select {
+  appearance: none;
+  width: 100%;
+  height: 40px;
+  padding: 0 40px 0 10px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 下拉箭头取 Remix Icon 的 arrow-down-s-line，用 mask 与主题变量上色 */
+.form-item > label:has(> select)::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 20px;
+  height: 20px;
+  background-color: var(--muted);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M11.9999 13.1714L16.9497 8.22168L18.3639 9.63589L11.9999 15.9999L5.63599 9.63589L7.0502 8.22168L11.9999 13.1714Z'/%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  pointer-events: none;
+}
+
+/* 用户交互后仍未通过原生校验时边框变红，提示气泡由浏览器绘制 */
+.form-item input:user-invalid,
+.form-item select:user-invalid {
+  border-color: var(--danger);
+}
