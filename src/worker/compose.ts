@@ -41,8 +41,9 @@ export async function composeMessage(
     return badRequest('message text is empty');
   }
 
-  const cleanSubject = subject || '(无主题)';
-  // 内联图片：正文里的应用图片地址换成 cid，对象作为内联附件随信发出。
+  // 空主题照原样存，界面按当前语言显示「无主题」
+  const cleanSubject = subject;
+  // 正文里的应用图片地址换成 cid，图片作为内联附件随信发出
   // 只装载属于当前用户的附件，否则拿到 id 就能把别人的图片发出去
   const inlineIds = attachmentIdsIn(html);
   const attachments: EmailAttachment[] = [];
@@ -120,7 +121,7 @@ export async function composeMessage(
       .first<{ id: string }>();
 
     if (draft) {
-      // 正文引用的内联图片随发出的邮件保留（按绑定参数上限分块）
+      // 正文引用的内联图片随发出的邮件保留，按绑定参数上限分块
       if (inlineIds.length > 0) {
         for (const batch of chunks(inlineIds, DB_PARAM_LIMIT - 2)) {
           const placeholders = batch.map(() => '?').join(', ');
@@ -170,7 +171,7 @@ export async function saveDraft(
     typeof payload.id === 'string' && payload.id
       ? payload.id
       : crypto.randomUUID();
-  // 归属写进 upsert 条件：命中的是别人的邮件或不是草稿时，既不改也不新建
+  // 归属写进 upsert 条件，命中的是别人的邮件或不是草稿时既不改也不新建
   const saved = await env.DB.prepare(
     `INSERT INTO messages (
        id, user_id, mailbox, direction, from_address, to_address, subject, body_text, body_html

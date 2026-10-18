@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, isLocale } from '../locales';
+
 import { checkMailDomain, parseMailDomain } from './domains';
 import {
   badRequest,
@@ -11,7 +13,7 @@ import {
 const COOKIE_NAME = 'session';
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const PASSWORD_ITERATIONS = 100_000;
-// 登录失败次数与锁定时长（同 Roundcube 的 failed_login 计数）
+// 登录失败次数与锁定时长，同 Roundcube 的 failed_login 计数
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 
@@ -28,11 +30,11 @@ type PublicUser = Omit<AuthUser, 'id'>;
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 200;
 const MAX_NAME_LENGTH = 100;
-// 邮箱地址 @ 前的部分：字母数字开头，可含 . _ + -
+// 邮箱地址 @ 前的部分以字母数字开头，可含 . _ + -
 const USERNAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
 
 /**
- * 用户名即邮箱地址 @ 前的部分，返回错误码或 null。
+ * 用户名是邮箱地址 @ 前的部分，不允许出现 @。
  */
 export function validateUsername(value: string): string | null {
   if (!value || value.includes('@') || !USERNAME_PATTERN.test(value)) {
@@ -123,7 +125,7 @@ async function authState(env: Env, request: Request): Promise<Response> {
   });
 }
 
-// 初始化向导：检查配置域名的就绪状态（仅未初始化时可访问）
+// 初始化向导检查配置域名的就绪状态，仅未初始化时可访问
 async function setupDomain(env: Env): Promise<Response> {
   if (await hasUsers(env)) {
     return Response.json({ error: 'already initialized' }, { status: 409 });
@@ -152,10 +154,9 @@ async function setup(env: Env, request: Request): Promise<Response> {
     typeof payload.username === 'string' ? payload.username.trim() : '';
   const name = typeof payload.name === 'string' ? payload.name.trim() : '';
   const password = typeof payload.password === 'string' ? payload.password : '';
-  const language =
-    typeof payload.language === 'string' && payload.language.trim()
-      ? payload.language.trim()
-      : 'zh-CN';
+  const requested =
+    typeof payload.language === 'string' ? payload.language.trim() : '';
+  const language = isLocale(requested) ? requested : DEFAULT_LOCALE;
 
   if (!domain) {
     return badRequest('mail domain is not configured');
@@ -219,7 +220,7 @@ async function login(env: Env, request: Request): Promise<Response> {
     return Response.json({ error: 'invalid credentials' }, { status: 401 });
   }
 
-  // 用户名是地址 @ 前的部分，域名固定；按完整地址等值查询才能用上 NOCASE 唯一索引
+  // 用户名是地址 @ 前的部分，域名固定，按完整地址等值查询才能用上 NOCASE 唯一索引
   const user = await env.DB.prepare(
     `SELECT id, email, name, language, role, status, password_hash,
             failed_login_at, failed_login_count
@@ -374,7 +375,7 @@ async function changePassword(env: Env, request: Request): Promise<Response> {
   return Response.json({ ok: true });
 }
 
-// 更新账号资料：用户名、昵称与界面语言，只处理传入的字段
+// 账号资料部分更新，只处理传入的字段
 async function updateProfile(env: Env, request: Request): Promise<Response> {
   const user = await authenticate(request, env);
 
@@ -417,7 +418,7 @@ async function updateProfile(env: Env, request: Request): Promise<Response> {
     }
   }
 
-  if (language !== null && (!language || language.length > 16)) {
+  if (language !== null && !isLocale(language)) {
     return badRequest('invalid language');
   }
 
@@ -527,7 +528,7 @@ function readSessionToken(request: Request): string | null {
 }
 
 /**
- * 清理过期会话（定时任务调用）。
+ * 清理过期会话，由定时任务调用。
  */
 export async function purgeExpiredSessions(env: Env): Promise<void> {
   // expires_at 存的是 ISO，用 datetime('now') 比较会因 'T' > ' ' 恒不成立

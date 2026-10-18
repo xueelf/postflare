@@ -7,7 +7,7 @@ CREATE TABLE users (
   password_hash TEXT,
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('owner', 'user')),
   status TEXT NOT NULL DEFAULT 'invited' CHECK (status IN ('invited', 'active', 'disabled')),
-  language TEXT NOT NULL DEFAULT 'zh-CN',
+  language TEXT NOT NULL DEFAULT 'en',
   -- 登录失败计数与最近一次失败时间，用于限流（同 Roundcube 的 failed_login）
   failed_login_at TEXT,
   failed_login_count INTEGER NOT NULL DEFAULT 0 CHECK (failed_login_count >= 0),
