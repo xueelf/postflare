@@ -1,0 +1,49 @@
+.account-avatar {
+  --button-background-color: transparent;
+  --button-border-color: transparent;
+  --button-border-width: 0;
+  --button-padding: 0;
+  --button-hover-background-color: transparent;
+  --button-active-background-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.account-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.account-text strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-text span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* hover 或弹层打开时：文字转强调色（站内链接同款），头像轻微压暗 */
+.account-avatar:hover .account-text strong,
+.account-avatar:hover .account-text span,
+.account-avatar:has(+ .popover:popover-open) .account-text strong,
+.account-avatar:has(+ .popover:popover-open) .account-text span {
+  color: var(--accent-text);
+}
+
+.account-avatar:hover,
+.account-avatar:has(+ .popover:popover-open) {
+  filter: brightness(0.96);
+}

@@ -1,0 +1,89 @@
+.popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  min-width: anchor-size(width);
+  box-shadow: var(--shadow-sm);
+}
+
+.popover:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 底边弹层：8px 使弹层圆角与下方按钮圆角相切（圆心纵向对齐），避免按钮底色从缺口透出 */
+.popover-bottom {
+  top: anchor(bottom);
+  left: anchor(left);
+  margin-top: 8px;
+}
+
+.popover-top {
+  bottom: anchor(top);
+  left: anchor(left);
+  margin-bottom: 12px;
+}
+
+/* 条目：按钮与链接共用一套样式 */
+.popover-item {
+  --button-background-color: transparent;
+  --button-border-color: transparent;
+  --button-border-width: 0;
+  --button-border-radius: var(--radius-control);
+  --button-color: var(--secondary);
+  --button-font-size: 14px;
+  --button-hover-background-color: var(--nav-active);
+  --button-padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--secondary);
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.popover-item:hover {
+  --button-color: var(--text);
+  background: var(--nav-active);
+  color: var(--text);
+}
+
+.popover-item svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.popover-item.danger {
+  --button-color: var(--danger);
+  color: var(--danger);
+}
+
+.popover-item.danger:hover {
+  --button-hover-background-color: color-mix(
+    in srgb,
+    var(--danger) 10%,
+    transparent
+  );
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.popover-item.danger svg {
+  color: var(--danger);
+}
+
+/* 备注（版本号一类） */
+.popover-note {
+  padding: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
