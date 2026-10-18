@@ -1,0 +1,192 @@
+.auth-wrap {
+  position: relative;
+  display: grid;
+  place-items: start center;
+  min-height: 100dvh;
+  padding: 64px 16px 40px;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      640px 380px at 50% -120px,
+      color-mix(in srgb, var(--accent) 9%, transparent),
+      transparent 70%
+    ),
+    var(--bg);
+}
+
+/* 品牌图形：右下角探出的淡色水印 */
+.auth-watermark {
+  position: absolute;
+  right: -56px;
+  bottom: -64px;
+  color: var(--accent);
+  opacity: 0.07;
+}
+
+.auth-stage {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  animation: auth-enter 0.28s ease-out both;
+}
+
+/* 标题区：单列居中 */
+.auth-head {
+  text-align: center;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.auth-logo {
+  color: var(--accent);
+}
+
+.auth-name {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.auth-card {
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-container);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 头部用共用的 dialog-head，内容紧接标题，与弹窗同一套留白 */
+.auth-card-body {
+  padding: 0 16px 16px;
+}
+
+/* 只读的域名行：域名 + 就绪状态图标 */
+.auth-domain-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.auth-domain-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-status {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--accent);
+}
+
+.auth-status[data-state='warn'] {
+  color: var(--danger);
+}
+
+.auth-status[data-state='loading'] {
+  color: var(--muted);
+}
+
+.auth-spinner {
+  animation: auth-spin 0.9s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.auth-notice-slot {
+  margin-top: 16px;
+}
+
+.auth-snippet {
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  line-height: 18px;
+  overflow-x: auto;
+}
+
+.auth-submit {
+  --button-font-size: 14px;
+  width: 100%;
+  height: 40px;
+  margin-top: 16px;
+}
+
+/* 忘记密码：最后一个输入框与提交按钮之间的可点击文本 */
+.auth-forgot {
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font-size: 14px;
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.auth-forgot:hover {
+  text-decoration: underline;
+}
+
+.auth-help {
+  display: grid;
+  gap: 12px;
+  color: var(--secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.auth-help p {
+  margin: 0;
+}
+
+.auth-help .auth-snippet {
+  background: var(--surface-muted);
+}
+
+@keyframes auth-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-stage {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-wrap {
+    padding: 32px 14px 24px;
+  }
+}
+
+/* 域名服务未就绪提示（配置状态，不是表单校验错误） */
+.auth-issue {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 18px;
+}
