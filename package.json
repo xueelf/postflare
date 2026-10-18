@@ -2,6 +2,7 @@
   "name": "postflare",
   "version": "0.1.0",
   "private": true,
+  "description": "Self-hosted webmail on Cloudflare Workers.",
   "license": "MIT",
   "author": "Yuki <admin@yuki.sh>",
   "type": "module",
