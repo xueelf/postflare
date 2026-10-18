@@ -1,0 +1,60 @@
+.compose-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.compose-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.compose-toolbar .icon-btn[data-active='true'] {
+  --button-color: var(--accent);
+}
+
+/* 与 compose-line 同款底部线条，同样在获得焦点时变色 */
+.compose-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  border-bottom: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.compose-body:focus-within {
+  border-color: var(--accent);
+}
+
+.compose-body .tiptap {
+  flex: 1;
+  padding: 4px 0 12px;
+  font-size: 14px;
+  line-height: 22px;
+  outline: none;
+}
+
+.compose-body .tiptap p {
+  margin: 0 0 8px;
+}
+
+.compose-body .tiptap p:last-child {
+  margin-bottom: 0;
+}
+
+.compose-body .tiptap img {
+  max-width: 100%;
+  height: auto;
+}
+
+.compose-body .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--faint);
+  pointer-events: none;
+}
