@@ -4,6 +4,7 @@ import type { NavigateFunction } from 'react-router';
 import { apiFetch } from '../api';
 import { useToast } from '../components/toast';
 import { templateHtml } from '../format';
+import { useI18n } from '../i18n';
 import { type MailRoute, viewPath } from '../route';
 import { parseTemplateFile } from '../template-import';
 
@@ -58,6 +59,7 @@ export function useTemplates(
   const [editing, setEditing] = useState<TemplateDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+  const { t } = useI18n();
 
   const refreshTemplates = () =>
     apiFetch('/api/templates')
@@ -75,7 +77,7 @@ export function useTemplates(
     refreshTemplates();
   }, [ready]);
 
-  // 模板弹窗由片段驱动，编辑哪一份留在状态里；刷新时回落到路由上打开的那份
+  // 模板弹窗由片段驱动，编辑哪一份留在状态里，刷新时回落到路由上打开的那份
   useEffect(() => {
     if (!ready) {
       return;
@@ -142,7 +144,9 @@ export function useTemplates(
         if (!res.ok) {
           const data = (await res.json()) as { error?: string };
 
-          toast.error(data.error ?? `保存失败（${res.status}）`);
+          toast.error(
+            data.error ?? t('templates.saveFailed', { status: res.status }),
+          );
           setSaving(false);
 
           return;
@@ -159,22 +163,22 @@ export function useTemplates(
         refreshTemplates();
       })
       .catch(() => {
-        toast.error('保存失败，请重试');
+        toast.error(t('templates.saveFailedRetry'));
         setSaving(false);
       });
   };
 
   const removeTemplate = (id: string) => {
     askConfirm({
-      title: '删除这个模板？',
-      message: '删除后无法恢复。',
-      confirmText: '删除',
+      title: t('templates.confirmDelete'),
+      message: t('templates.deleteWarning'),
+      confirmText: t('templates.delete'),
       danger: true,
       action: () => {
         apiFetch(`/api/templates/${id}`, { method: 'DELETE' })
           .then(res => {
             if (!res.ok) {
-              toast.error(`删除失败（${res.status}）`);
+              toast.error(t('templates.deleteFailed', { status: res.status }));
 
               return;
             }
@@ -182,20 +186,20 @@ export function useTemplates(
             refreshTemplates();
           })
           .catch(() => {
-            toast.error('删除失败，请重试');
+            toast.error(t('templates.deleteFailedRetry'));
           });
       },
     });
   };
 
-  // 导入 .eml：主题作名称、正文取 HTML；要覆盖已有内容时先确认
+  // 导入 .eml：主题作名称、正文取 HTML，要覆盖已有内容时先确认
   const importTemplateFile = (file: File) => {
     if (!file.name.toLowerCase().endsWith('.eml')) {
-      toast.error('仅支持 .eml 文件');
+      toast.error(t('templates.emlOnly'));
 
       return;
     }
-    parseTemplateFile(file)
+    parseTemplateFile(file, t)
       .then(({ name, bodyHtml }) => {
         const apply = () =>
           setEditing(current =>
@@ -213,9 +217,11 @@ export function useTemplates(
           return;
         }
         askConfirm({
-          title: name ? '导入将替换当前的名称与正文？' : '导入将替换当前正文？',
-          message: '当前编辑的内容将被文件内容覆盖。',
-          confirmText: '替换',
+          title: name
+            ? t('templates.importReplaceAll')
+            : t('templates.importReplaceBody'),
+          message: t('templates.importOverwrite'),
+          confirmText: t('templates.replace'),
           danger: true,
           action: apply,
         });

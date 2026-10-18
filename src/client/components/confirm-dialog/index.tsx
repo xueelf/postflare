@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { useI18n } from '../../i18n';
 import { Modal } from '../modal';
 
 import './style.css';
@@ -16,7 +17,7 @@ export interface ConfirmDialogProps {
 }
 
 /**
- * 确认弹窗：危险操作的二次确认。
+ * 危险操作的二次确认弹窗。
  */
 export function ConfirmDialog({
   title,
@@ -26,6 +27,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useI18n();
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   // 打开后聚焦安全的「取消」，而不是右上角的关闭按钮
@@ -40,7 +42,7 @@ export function ConfirmDialog({
       footer={
         <>
           <button ref={cancelRef} type="button" onClick={onCancel}>
-            取消
+            {t('ui.cancel')}
           </button>
           <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>
             {confirmText}

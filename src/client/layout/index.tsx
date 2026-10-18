@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { useI18n } from '../i18n';
+
 import { type SidebarProps, Sidebar } from './sidebar';
 
 import './style.css';
@@ -12,7 +14,7 @@ export interface LayoutProps extends SidebarProps {
 }
 
 /**
- * 应用布局：侧栏 + 内容区（列表与阅读双栏，窄屏单栏切换）。
+ * 应用布局由侧栏与内容区组成，内容区在宽屏下是列表与阅读双栏，窄屏切换为单栏。
  */
 export function Layout({
   drawerOpen,
@@ -21,6 +23,8 @@ export function Layout({
   children,
   ...sidebar
 }: LayoutProps) {
+  const { t } = useI18n();
+
   return (
     <div className="shell">
       <aside
@@ -38,7 +42,7 @@ export function Layout({
         <button
           type="button"
           className="backdrop"
-          aria-label="关闭菜单"
+          aria-label={t('ui.close')}
           onClick={onDrawerClose}
         />
       )}

@@ -24,13 +24,14 @@ import {
   type UserSummary,
   useUsers,
 } from '../../hooks/use-users';
+import { type MessageKey, useI18n } from '../../i18n';
 
 import './style.css';
 
-const STATUS_LABELS: Record<UserSummary['status'], string> = {
-  invited: '待注册',
-  active: '正常',
-  disabled: '已停用',
+const STATUS_KEYS: Record<UserSummary['status'], MessageKey> = {
+  invited: 'users.statusInvited',
+  active: 'users.statusActive',
+  disabled: 'users.statusDisabled',
 };
 
 export interface UsersProps {
@@ -42,6 +43,7 @@ export interface UsersProps {
  * 用户管理：仅所有者可见，列表、新建、启用停用、删除与一次性链接。
  */
 export function Users({ mailDomain, askConfirm }: UsersProps) {
+  const { locale, t } = useI18n();
   const { users, busy, create, setStatus, remove, issueLink } = useUsers();
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
@@ -66,9 +68,9 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
 
   const askDisable = (user: UserSummary) => {
     askConfirm({
-      title: '停用这个邮箱？',
-      message: `停用后 ${user.email} 不再接收新邮件，发件方会收到退信，也无法登录。已有邮件会保留，可随时重新启用。`,
-      confirmText: '停用',
+      title: t('users.disableTitle'),
+      message: t('users.disableMessage', { email: user.email }),
+      confirmText: t('users.disable'),
       action: () => {
         setStatus(user.id, 'disabled');
       },
@@ -77,9 +79,9 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
 
   const askRemove = (user: UserSummary) => {
     askConfirm({
-      title: '删除这个用户？',
-      message: `删除后 ${user.email} 的账号、邮件、附件与模板会一并清除，无法恢复。`,
-      confirmText: '删除',
+      title: t('users.removeTitle'),
+      message: t('users.removeMessage', { email: user.email }),
+      confirmText: t('users.delete'),
       danger: true,
       action: () => {
         remove(user.id);
@@ -101,7 +103,7 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
 
     if (user.status === 'invited') {
       actions.push({
-        label: '注册链接',
+        label: t('users.inviteLink'),
         icon: <RiLink size={20} aria-hidden />,
         run: () => openLink(user.id),
       });
@@ -109,12 +111,12 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
       actions.push(
         user.status === 'active'
           ? {
-              label: '停用',
+              label: t('users.disable'),
               icon: <RiForbidLine size={20} aria-hidden />,
               run: () => askDisable(user),
             }
           : {
-              label: '启用',
+              label: t('users.enable'),
               icon: <RiCheckLine size={20} aria-hidden />,
               run: () => {
                 setStatus(user.id, 'active');
@@ -123,14 +125,14 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
       );
 
       actions.push({
-        label: '重置密码',
+        label: t('users.resetPassword'),
         icon: <RiKey2Line size={20} aria-hidden />,
         run: () => openLink(user.id),
       });
     }
 
     actions.push({
-      label: '删除用户',
+      label: t('users.deleteUser'),
       icon: <RiDeleteBinLine size={20} aria-hidden />,
       run: () => askRemove(user),
     });
@@ -139,15 +141,15 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
   };
 
   return (
-    <section className="panel users-pane" aria-label="用户管理">
+    <section className="panel users-pane" aria-label={t('users.title')}>
       <div className="panel-head">
         <search className="search">
           <RiSearchLine size={20} aria-hidden />
           <input
             type="search"
             value={query}
-            placeholder="搜索邮箱或昵称"
-            aria-label="搜索用户"
+            placeholder={t('users.searchPlaceholder')}
+            aria-label={t('users.search')}
             onChange={event => setQuery(event.target.value)}
           />
         </search>
@@ -157,25 +159,25 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
           onClick={() => setCreating(true)}
         >
           <RiAddLine size={20} aria-hidden />
-          新建用户
+          {t('users.newUser')}
         </Button>
       </div>
       <hr />
       <div className="panel-body">
         {visible.length === 0 ? (
           <EmptyState icon={<RiGroupLine aria-hidden />}>
-            {needle ? '没有匹配的用户' : '还没有其他用户'}
+            {needle ? t('users.noMatch') : t('users.empty')}
           </EmptyState>
         ) : (
           <table className="users-table">
             <thead>
               <tr>
-                <th>邮箱</th>
-                <th>昵称</th>
-                <th>状态</th>
-                <th>创建时间</th>
+                <th>{t('users.email')}</th>
+                <th>{t('users.nickname')}</th>
+                <th>{t('users.status')}</th>
+                <th>{t('users.createdAt')}</th>
                 <th>
-                  <span className="users-sr">操作</span>
+                  <span className="users-sr">{t('users.actions')}</span>
                 </th>
               </tr>
             </thead>
@@ -189,12 +191,12 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
                   <td>{user.name}</td>
                   <td>
                     <span className={`users-state ${user.status}`}>
-                      {STATUS_LABELS[user.status]}
+                      {t(STATUS_KEYS[user.status])}
                     </span>
                   </td>
                   <td className="users-when">
                     <time dateTime={dateTimeValue(user.created_at)}>
-                      {formatDate(user.created_at)}
+                      {formatDate(user.created_at, locale)}
                     </time>
                   </td>
                   <td className="users-actions">
@@ -240,6 +242,7 @@ function CreateDialog({
   onCreated: (issued: IssuedLink) => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const formId = useId();
@@ -247,12 +250,12 @@ function CreateDialog({
 
   return (
     <Modal
-      title="新建用户"
+      title={t('users.newUser')}
       onDismiss={onClose}
       footer={
         <>
           <button type="button" onClick={onClose}>
-            取消
+            {t('users.cancel')}
           </button>
           <Button
             type="submit"
@@ -260,7 +263,7 @@ function CreateDialog({
             variant="primary"
             disabled={busy || !clean || !name.trim()}
           >
-            {busy ? '创建中…' : '创建'}
+            {busy ? t('users.creating') : t('users.create')}
           </Button>
         </>
       }
@@ -280,7 +283,7 @@ function CreateDialog({
         <FormItem
           label={
             <>
-              <span>用户名</span>
+              <span>{t('users.username')}</span>
               {clean && (
                 <span className="form-ref">
                   {clean}@{mailDomain}
@@ -296,7 +299,7 @@ function CreateDialog({
             onChange={event => setUsername(event.target.value)}
           />
         </FormItem>
-        <FormItem label="昵称">
+        <FormItem label={t('users.nickname')}>
           <input
             value={name}
             required
@@ -319,42 +322,41 @@ function LinkDialog({
   issued: IssuedLink;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const toast = useToast();
   const invite = issued.purpose === 'invite';
 
   const copy = () => {
     navigator.clipboard.writeText(issued.url).then(
-      () => toast.success('链接已复制'),
-      () => toast.error('复制失败，请手动复制'),
+      () => toast.success(t('users.linkCopied')),
+      () => toast.error(t('users.copyFailed')),
     );
   };
 
   return (
     <Modal
-      title={invite ? '注册链接' : '重置链接'}
+      title={invite ? t('users.inviteLink') : t('users.resetLink')}
       onDismiss={onClose}
       footer={
         <Button variant="primary" onClick={onClose}>
-          完成
+          {t('users.done')}
         </Button>
       }
     >
       <p className="users-text">
-        {invite
-          ? '把下面的链接发给对方，打开后设置自己的密码。链接 24 小时后失效，仅可使用一次。'
-          : '把下面的链接发给对方，打开后重设密码。链接 1 小时后失效，仅可使用一次。'}
+        {invite ? t('users.inviteHint') : t('users.resetHint')}
       </p>
       <div className="users-link">
         <input
           readOnly
           value={issued.url}
-          aria-label="一次性链接"
+          aria-label={t('users.oneTimeLink')}
           onFocus={event => event.target.select()}
         />
         <Button
           variant="icon"
-          aria-label="复制链接"
-          title="复制链接"
+          aria-label={t('users.copyLink')}
+          title={t('users.copyLink')}
           onClick={copy}
         >
           <RiFileCopyLine size={20} aria-hidden />

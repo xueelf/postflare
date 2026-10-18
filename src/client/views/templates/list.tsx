@@ -7,6 +7,7 @@ import { ListHead } from '../../components/list-head';
 import { ListRow } from '../../components/list-row';
 import { dateTimeValue, formatListDate, htmlToText } from '../../format';
 import type { Template } from '../../hooks/use-templates';
+import { useI18n } from '../../i18n';
 
 export interface TemplateListProps {
   templates: Template[];
@@ -23,7 +24,7 @@ export interface TemplateListProps {
 }
 
 /**
- * 模板列表：搜索与选中；新建入口在头像菜单与空态按钮。
+ * 模板列表负责搜索与选中，新建入口在头像菜单与空态按钮。
  */
 export function TemplateList({
   templates,
@@ -38,6 +39,7 @@ export function TemplateList({
   onLogout,
   onMenu,
 }: TemplateListProps) {
+  const { locale, t } = useI18n();
   const query = search.trim().toLowerCase();
   // 正文转纯文本只做一次，输入框每次输入都会重渲染
   const items = useMemo(
@@ -55,14 +57,14 @@ export function TemplateList({
     : items;
 
   return (
-    <section className="panel list-pane" aria-label="模板">
+    <section className="panel list-pane" aria-label={t('templates.title')}>
       <ListHead
         collapsed={collapsed}
         onToggleSidebar={onToggleSidebar}
         onMenu={onMenu}
         search={search}
         onSearch={onSearch}
-        searchPlaceholder="搜索模板"
+        searchPlaceholder={t('templates.search')}
         accountMenuId="account-menu-templates"
         user={user}
         onCreateTemplate={onCreateTemplate}
@@ -74,12 +76,12 @@ export function TemplateList({
           action={
             query ? undefined : (
               <Button variant="primary" onClick={onCreateTemplate}>
-                新建模板
+                {t('templates.newTemplate')}
               </Button>
             )
           }
         >
-          {query ? '没有匹配的模板' : '还没有模板'}
+          {query ? t('templates.noMatch') : t('templates.empty')}
         </EmptyState>
       ) : (
         <ul className="list-body">
@@ -91,9 +93,9 @@ export function TemplateList({
                 key={template.id}
                 selected={selected}
                 title={template.name}
-                text={template.text || '(无正文)'}
+                text={template.text || t('templates.noBody')}
                 dateTime={dateTimeValue(template.updated_at)}
-                when={formatListDate(template.updated_at)}
+                when={formatListDate(template.updated_at, locale)}
                 onOpen={() => onSelect(template.id)}
               />
             );
