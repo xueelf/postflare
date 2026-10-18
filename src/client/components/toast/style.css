@@ -1,0 +1,83 @@
+.toast-region {
+  position: fixed;
+  inset: 16px 0 auto;
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.toast-region:not(:popover-open) {
+  display: none;
+}
+
+.toast {
+  --toast-color: var(--accent);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--toast-color) 28%, var(--border));
+  border-radius: var(--radius-container);
+  background: color-mix(in srgb, var(--toast-color) 6%, var(--surface));
+  box-shadow: var(--shadow-md);
+  animation: toast-enter 0.2s ease-out;
+}
+
+.toast.toast-leaving {
+  animation: toast-leave 0.2s ease-in forwards;
+}
+
+.toast[data-variant='error'] {
+  --toast-color: var(--danger);
+}
+
+.toast[data-variant='success'] {
+  --toast-color: var(--success);
+}
+
+.toast > svg {
+  flex: none;
+  color: var(--toast-color);
+}
+
+.toast p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.toast .toast-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes toast-leave {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* 降低动效时只把时长压到近零，保留动画事件以便动画结束后移除元素 */
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast.toast-leaving {
+    animation-duration: 0.01ms;
+  }
+}

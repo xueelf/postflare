@@ -1,0 +1,35 @@
+.primary {
+  --button-background-color: var(--accent);
+  --button-border-color: transparent;
+  --button-color: var(--on-accent);
+  --button-font-weight: 500;
+  --button-hover-background-color: var(--accent-hover);
+}
+
+.danger {
+  --button-background-color: var(--danger);
+  --button-border-color: transparent;
+  --button-color: var(--on-accent);
+  --button-hover-background-color: color-mix(in srgb, var(--danger) 88%, #000);
+}
+
+.icon-btn {
+  --button-background-color: transparent;
+  --button-border-color: transparent;
+  --button-color: var(--muted);
+  --button-hover-background-color: var(--nav-active);
+  --button-padding: 0;
+  width: 40px;
+  height: 40px;
+}
+
+/* 基础布局放进 :where()，不参与特异性竞争，隐藏或显示一类修饰类始终能覆盖它 */
+:where(.icon-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover {
+  --button-color: var(--text);
+}

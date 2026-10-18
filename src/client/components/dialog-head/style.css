@@ -1,0 +1,26 @@
+.dialog-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 12px 16px;
+}
+
+/* 与右侧按钮等宽，让标题相对整体居中，而不是相对剩余空间居中 */
+.dialog-lead {
+  flex: none;
+  width: 40px;
+}
+
+.dialog-head h2 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
