@@ -41,7 +41,8 @@ export async function composeMessage(
     return badRequest('message text is empty');
   }
 
-  const cleanSubject = subject || '(无主题)';
+  // 空主题照原样存，界面按当前语言显示「无主题」
+  const cleanSubject = subject;
   // 内联图片：正文里的应用图片地址换成 cid，对象作为内联附件随信发出。
   // 只装载属于当前用户的附件，否则拿到 id 就能把别人的图片发出去
   const inlineIds = attachmentIdsIn(html);

@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, isLocale } from '../locales';
+
 import { checkMailDomain, parseMailDomain } from './domains';
 import {
   badRequest,
@@ -152,10 +154,9 @@ async function setup(env: Env, request: Request): Promise<Response> {
     typeof payload.username === 'string' ? payload.username.trim() : '';
   const name = typeof payload.name === 'string' ? payload.name.trim() : '';
   const password = typeof payload.password === 'string' ? payload.password : '';
-  const language =
-    typeof payload.language === 'string' && payload.language.trim()
-      ? payload.language.trim()
-      : 'zh-CN';
+  const requested =
+    typeof payload.language === 'string' ? payload.language.trim() : '';
+  const language = isLocale(requested) ? requested : DEFAULT_LOCALE;
 
   if (!domain) {
     return badRequest('mail domain is not configured');
@@ -417,7 +418,7 @@ async function updateProfile(env: Env, request: Request): Promise<Response> {
     }
   }
 
-  if (language !== null && (!language || language.length > 16)) {
+  if (language !== null && !isLocale(language)) {
     return badRequest('invalid language');
   }
 
