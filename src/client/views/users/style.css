@@ -1,0 +1,147 @@
+.users-pane {
+  flex: 1;
+}
+
+.users-pane .search {
+  flex: 1;
+  max-width: 360px;
+}
+
+.users-create {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  white-space: nowrap;
+}
+
+/* 空状态要能撑满内容区居中；表格与面板左右各留 16，和列表行一致 */
+.users-pane .panel-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px;
+}
+
+.users-table {
+  flex: none;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.users-table th {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.users-table td {
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.users-table tbody tr:hover {
+  background: var(--hover);
+}
+
+.users-table tr.off td {
+  color: var(--muted);
+}
+
+.users-email {
+  font-weight: 600;
+}
+
+.users-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.users-state::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.users-state.invited::before {
+  background: var(--accent);
+}
+
+.users-state.disabled {
+  color: var(--muted);
+}
+
+.users-state.disabled::before {
+  background: var(--faint);
+}
+
+.users-when {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.users-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.users-actions menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.users-actions li {
+  display: contents;
+}
+
+.users-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.users-text {
+  margin: 0 0 12px;
+  color: var(--secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.users-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+.users-link input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.users-link input:focus {
+  outline: none;
+}
