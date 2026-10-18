@@ -23,6 +23,20 @@
 
 然后打开部署后的地址，初始化向导会检查域名的收信与发信就绪状态并创建所有者账号。更多账号在「用户」里创建。
 
+## 界面语言
+
+邮箱支持多种语言，与 Cloudflare 保持一致，共九种：
+
+- Deutsch
+- English
+- Español
+- Français
+- Italiano
+- Português
+- 한국어
+- 日本語
+- 中文
+
 ## 本地开发
 
 需要 [Bun](https://bun.sh)。

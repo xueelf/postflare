@@ -23,6 +23,20 @@ Before the app can send and receive mail, finish these settings in the Cloudflar
 
 Then open the deployed URL. The setup wizard checks the domain's receiving and sending readiness and creates the owner account; more accounts are created from the Users page.
 
+## Interface language
+
+Postflare supports multiple languages, the same nine as Cloudflare:
+
+- Deutsch
+- English
+- Español
+- Français
+- Italiano
+- Português
+- 한국어
+- 日本語
+- 中文
+
 ## Local development
 
 Requires [Bun](https://bun.sh).
