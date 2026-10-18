@@ -15,6 +15,7 @@ import {
   useState,
 } from 'react';
 
+import { useI18n } from '../../i18n';
 import { Button } from '../button';
 
 import './style.css';
@@ -56,6 +57,7 @@ export function useToast() {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const region = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
@@ -116,7 +118,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         ref={region}
         className="toast-region"
         popover="manual"
-        aria-label="通知"
+        aria-label={t('ui.notifications')}
       >
         {toasts.map(item => {
           const Icon = VARIANT_ICONS[item.variant];
@@ -139,7 +141,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 variant="icon"
                 className="toast-close"
                 onClick={() => dismiss(item.id)}
-                aria-label="关闭"
+                aria-label={t('ui.close')}
               >
                 <RiCloseLine size={20} aria-hidden />
               </Button>

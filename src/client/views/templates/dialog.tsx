@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { Editor } from '../../components/editor';
 import { Modal } from '../../components/modal';
 import type { TemplateDraft } from '../../hooks/use-templates';
+import { useI18n } from '../../i18n';
 
 import './style.css';
 
@@ -29,6 +30,7 @@ export function TemplateDialog({
   onImportFile,
   onDismiss,
 }: TemplateDialogProps) {
+  const { t } = useI18n();
   const nameRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -38,7 +40,9 @@ export function TemplateDialog({
 
   return (
     <Modal
-      title={draft.id ? '编辑模板' : '新建模板'}
+      title={
+        draft.id ? t('templates.editTemplate') : t('templates.newTemplate')
+      }
       size="lg"
       onDismiss={onDismiss}
       footer={
@@ -48,7 +52,7 @@ export function TemplateDialog({
           variant="primary"
           disabled={saving || !draft.name.trim()}
         >
-          {saving ? '保存中…' : '保存'}
+          {saving ? t('templates.saving') : t('templates.save')}
         </Button>
       }
     >
@@ -65,8 +69,8 @@ export function TemplateDialog({
           className="compose-line"
           value={draft.name}
           onChange={event => onChange({ ...draft, name: event.target.value })}
-          placeholder="名称"
-          aria-label="名称"
+          placeholder={t('templates.name')}
+          aria-label={t('templates.name')}
         />
         <Editor
           html={draft.body_html}
@@ -76,8 +80,8 @@ export function TemplateDialog({
               <Button
                 variant="icon"
                 className="template-import"
-                aria-label="导入模板"
-                title="导入模板"
+                aria-label={t('templates.importTemplate')}
+                title={t('templates.importTemplate')}
                 onClick={() => fileRef.current?.click()}
               >
                 <RiFileUploadLine size={20} aria-hidden />

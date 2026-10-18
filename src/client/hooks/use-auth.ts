@@ -4,6 +4,13 @@ import type { NavigateFunction } from 'react-router';
 import type { DomainStatus } from '../../worker/domains';
 import { apiFetch, setUnauthorizedHandler } from '../api';
 import { useToast } from '../components/toast';
+import {
+  type MessageKey,
+  type MessageParams,
+  initialLocale,
+  matchLocale,
+  translate,
+} from '../i18n';
 
 export interface AuthState {
   setupComplete: boolean;
@@ -16,12 +23,21 @@ export interface AuthState {
   mailDomain: string;
 }
 
-// 服务端错误码 → 界面文案
-const PROFILE_ERRORS: Record<string, string> = {
-  'username taken': '该用户名已被占用',
-  'invalid username': '用户名不能为空，且不能包含 @',
-  'name is empty': '昵称不能为空',
-  'invalid language': '界面语言无效',
+// 服务端错误码 → 文案键
+const AUTH_ERRORS: Record<string, MessageKey> = {
+  'username taken': 'auth.errorUsernameTaken',
+  'invalid username': 'auth.errorInvalidUsername',
+  'name is empty': 'auth.errorNameEmpty',
+  'invalid language': 'auth.errorInvalidLanguage',
+  'invalid credentials': 'auth.errorInvalidCredentials',
+  'too many attempts': 'auth.errorTooManyAttempts',
+  'account disabled': 'auth.errorAccountDisabled',
+  'already initialized': 'auth.errorAlreadyInitialized',
+  'mail domain is not configured': 'auth.errorMailDomain',
+  'password must be at least 8 characters': 'auth.errorPasswordTooShort',
+  'password is too long': 'auth.errorPasswordTooLong',
+  'current password is incorrect': 'auth.errorWrongPassword',
+  'link is invalid or expired': 'auth.errorLinkExpired',
 };
 
 /**
@@ -36,6 +52,22 @@ export function useAuth(navigate: NavigateFunction) {
   const [domainError, setDomainError] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
+
+  // 本 Hook 在 LocaleProvider 之上运行，语言只能自己取：账号语言优先，未登录按浏览器语言
+  const locale = auth?.user ? matchLocale(auth.user.language) : initialLocale();
+  const t = (key: MessageKey, params?: MessageParams) =>
+    translate(locale, key, params);
+
+  // 服务端错误码转当前语言，未匹配到的给通用失败提示
+  const report = (
+    data: { error?: string },
+    status: number,
+    fallback: MessageKey,
+  ) => {
+    const key = data.error ? AUTH_ERRORS[data.error] : undefined;
+
+    toast.error(key ? t(key) : t(fallback, { status }));
+  };
 
   const loadAuth = useCallback(() => {
     setAuthError(false);
@@ -58,14 +90,14 @@ export function useAuth(navigate: NavigateFunction) {
     fetch('/api/auth/domain')
       .then(async res => {
         if (!res.ok) {
-          throw new Error(`请求失败（${res.status}）`);
+          throw new Error(t('auth.requestFailed', { status: res.status }));
         }
         const data = (await res.json()) as { domain: DomainStatus };
 
         setDomain(data.domain);
       })
       .catch(() => {
-        setDomainError('无法检查域名状态，请刷新重试');
+        setDomainError(t('auth.domainCheckRetry'));
       });
   }, [auth]);
 
@@ -110,13 +142,7 @@ export function useAuth(navigate: NavigateFunction) {
         if (!res.ok) {
           const data = (await res.json()) as { error?: string };
 
-          toast.error(
-            !isSetup && res.status === 401
-              ? '账号或密码不正确'
-              : res.status === 403 && data.error === 'account disabled'
-                ? '账号已停用'
-                : (data.error ?? `请求失败（${res.status}）`),
-          );
+          report(data, res.status, 'auth.requestFailed');
           setAuthBusy(false);
 
           return;
@@ -134,7 +160,7 @@ export function useAuth(navigate: NavigateFunction) {
         setAuthBusy(false);
       })
       .catch(() => {
-        toast.error('网络请求失败，请重试');
+        toast.error(t('auth.networkError'));
         setAuthBusy(false);
       });
   };
@@ -160,19 +186,21 @@ export function useAuth(navigate: NavigateFunction) {
         setPasswordBusy(false);
 
         if (!res.ok) {
-          toast.error(
-            res.status === 401 ? '当前密码不正确' : `更新失败（${res.status}）`,
+          report(
+            (await res.json().catch(() => ({}))) as { error?: string },
+            res.status,
+            'auth.updateFailed',
           );
 
           return false;
         }
-        toast.success('密码已更新');
+        toast.success(t('auth.passwordUpdated'));
 
         return true;
       })
       .catch(() => {
         setPasswordBusy(false);
-        toast.error('更新失败，请重试');
+        toast.error(t('auth.updateFailedRetry'));
 
         return false;
       });
@@ -195,13 +223,10 @@ export function useAuth(navigate: NavigateFunction) {
         setProfileBusy(false);
 
         if (!res.ok) {
-          const data = (await res.json().catch(() => ({}))) as {
-            error?: string;
-          };
-
-          toast.error(
-            (data.error && PROFILE_ERRORS[data.error]) ??
-              `保存失败（${res.status}）`,
+          report(
+            (await res.json().catch(() => ({}))) as { error?: string },
+            res.status,
+            'auth.saveFailed',
           );
 
           return false;
@@ -211,13 +236,13 @@ export function useAuth(navigate: NavigateFunction) {
         setAuth(current =>
           current ? { ...current, user: data.user } : current,
         );
-        toast.success('已保存');
+        toast.success(t('auth.saved'));
 
         return true;
       })
       .catch(() => {
         setProfileBusy(false);
-        toast.error('保存失败，请重试');
+        toast.error(t('auth.saveFailedRetry'));
 
         return false;
       });
@@ -236,14 +261,10 @@ export function useAuth(navigate: NavigateFunction) {
         setAuthBusy(false);
 
         if (!res.ok) {
-          const data = (await res.json().catch(() => ({}))) as {
-            error?: string;
-          };
-
-          toast.error(
-            data.error === 'link is invalid or expired'
-              ? '链接无效或已过期'
-              : `设置失败（${res.status}）`,
+          report(
+            (await res.json().catch(() => ({}))) as { error?: string },
+            res.status,
+            'auth.passwordSetFailed',
           );
 
           return false;
@@ -253,14 +274,14 @@ export function useAuth(navigate: NavigateFunction) {
         setAuth(current =>
           current ? { ...current, user: data.user } : current,
         );
-        toast.success('密码已设置');
+        toast.success(t('auth.passwordSet'));
         navigate('/inbox', { replace: true });
 
         return true;
       })
       .catch(() => {
         setAuthBusy(false);
-        toast.error('设置失败，请重试');
+        toast.error(t('auth.passwordSetFailedRetry'));
 
         return false;
       });

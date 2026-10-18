@@ -1,6 +1,7 @@
 import { RiFileTextLine, RiLogoutBoxRLine } from '@remixicon/react';
 
 import { displayName } from '../../format';
+import { useI18n } from '../../i18n';
 import { Avatar } from '../avatar';
 import { Popover } from '../popover';
 
@@ -22,13 +23,14 @@ export function AccountMenu({
   onCreateTemplate,
   onLogout,
 }: AccountMenuProps) {
+  const { t } = useI18n();
   const accountName = displayName(user);
 
   return (
     <Popover
       id={id}
       triggerClassName="account-avatar"
-      triggerLabel="账户菜单"
+      triggerLabel={t('ui.accountMenu')}
       triggerTitle={user.email}
       trigger={
         <>
@@ -48,11 +50,11 @@ export function AccountMenu({
         popoverTargetAction="hide"
       >
         <RiFileTextLine size={20} aria-hidden />
-        <span>新建模板</span>
+        <span>{t('ui.newTemplate')}</span>
       </button>
       <button type="button" className="popover-item danger" onClick={onLogout}>
         <RiLogoutBoxRLine size={20} aria-hidden />
-        <span>退出登录</span>
+        <span>{t('ui.logout')}</span>
       </button>
     </Popover>
   );

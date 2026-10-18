@@ -1,5 +1,6 @@
 import { RiMenuLine, RiSearchLine } from '@remixicon/react';
 
+import { useI18n } from '../../i18n';
 import { AccountMenu } from '../account-menu';
 import { Button } from '../button';
 import { MenuButton } from '../menu-button';
@@ -32,7 +33,10 @@ export function ListHead({
   onCreateTemplate,
   onLogout,
 }: ListHeadProps) {
-  const toggleLabel = collapsed ? '展开侧栏' : '折叠侧栏';
+  const { t } = useI18n();
+  const toggleLabel = collapsed
+    ? t('mail.expandSidebar')
+    : t('mail.collapseSidebar');
 
   return (
     <>

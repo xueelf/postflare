@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { useI18n } from '../i18n';
+
 import { type SidebarProps, Sidebar } from './sidebar';
 
 import './style.css';
@@ -21,6 +23,8 @@ export function Layout({
   children,
   ...sidebar
 }: LayoutProps) {
+  const { t } = useI18n();
+
   return (
     <div className="shell">
       <aside
@@ -38,7 +42,7 @@ export function Layout({
         <button
           type="button"
           className="backdrop"
-          aria-label="关闭菜单"
+          aria-label={t('ui.close')}
           onClick={onDrawerClose}
         />
       )}

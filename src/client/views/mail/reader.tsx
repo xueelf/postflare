@@ -17,6 +17,7 @@ import { EmptyState } from '../../components/empty-state';
 import { MessageView } from '../../components/message-view';
 import { dateTimeValue, emailHtml, formatDate, formatSize } from '../../format';
 import type { MessageDetail } from '../../hooks/use-messages';
+import { useI18n } from '../../i18n';
 import type { View } from '../../route';
 
 export interface ReaderProps {
@@ -45,11 +46,13 @@ export function Reader({
   onMove,
   onPurge,
 }: ReaderProps) {
+  const { locale, t } = useI18n();
+
   if (!message) {
     return (
-      <section className="panel reader-pane" aria-label="邮件阅读">
+      <section className="panel reader-pane" aria-label={t('mail.reader')}>
         <EmptyState icon={<RiMailLine aria-hidden />}>
-          选择一封邮件阅读
+          {t('mail.selectMessage')}
         </EmptyState>
       </section>
     );
@@ -65,7 +68,7 @@ export function Reader({
   const actions: Array<{ icon: ReactNode; label: string; run: () => void }> = [
     {
       icon: <RiEditLine size={20} aria-hidden />,
-      label: view === 'drafts' ? '编辑草稿' : '写邮件',
+      label: view === 'drafts' ? t('mail.editDraft') : t('mail.compose'),
       run: onCompose,
     },
   ];
@@ -74,12 +77,12 @@ export function Reader({
     actions.push(
       {
         icon: <RiMailForbidLine size={20} aria-hidden />,
-        label: '标记为垃圾邮件',
+        label: t('mail.markSpam'),
         run: () => onMove('spam'),
       },
       {
         icon: <RiDeleteBinLine size={20} aria-hidden />,
-        label: '删除',
+        label: t('mail.delete'),
         run: () => onMove('trash'),
       },
     );
@@ -87,12 +90,12 @@ export function Reader({
     actions.push(
       {
         icon: <RiInboxLine size={20} aria-hidden />,
-        label: '不是垃圾邮件',
+        label: t('mail.notSpam'),
         run: () => onMove('inbox'),
       },
       {
         icon: <RiDeleteBinLine size={20} aria-hidden />,
-        label: '删除',
+        label: t('mail.delete'),
         run: () => onMove('trash'),
       },
     );
@@ -100,41 +103,41 @@ export function Reader({
     actions.push(
       {
         icon: <RiInboxUnarchiveLine size={20} aria-hidden />,
-        label: '恢复',
+        label: t('mail.restore'),
         run: () => onMove(message.direction === 'inbound' ? 'inbox' : 'sent'),
       },
       {
         icon: <RiDeleteBin2Line size={20} aria-hidden />,
-        label: '彻底删除',
+        label: t('mail.purge'),
         run: onPurge,
       },
     );
   } else if (view === 'sent') {
     actions.push({
       icon: <RiDeleteBinLine size={20} aria-hidden />,
-      label: '删除',
+      label: t('mail.delete'),
       run: () => onMove('trash'),
     });
   } else if (view === 'drafts') {
     actions.push({
       icon: <RiDeleteBinLine size={20} aria-hidden />,
-      label: '丢弃',
+      label: t('mail.discard'),
       run: onDiscard,
     });
   }
 
   return (
-    <section className="panel reader-pane" aria-label="邮件阅读">
+    <section className="panel reader-pane" aria-label={t('mail.reader')}>
       <div className="reader-head">
         <Button
           variant="icon"
           className="reader-back"
           onClick={onBack}
-          aria-label="返回"
+          aria-label={t('mail.back')}
         >
           <RiArrowLeftLine size={20} aria-hidden />
         </Button>
-        <h2>{message.subject || '(无主题)'}</h2>
+        <h2>{message.subject || t('mail.noSubject')}</h2>
         <ActionMenu className="reader-actions" items={actions} />
       </div>
       <hr />
@@ -149,19 +152,19 @@ export function Reader({
                 ? message.from_address
                 : undefined
           }
-          when={formatDate(message.created_at)}
+          when={formatDate(message.created_at, locale)}
           dateTime={dateTimeValue(message.created_at)}
           detailsId="message-details"
         >
           <dl id="message-details" popover="auto" className="message-details">
-            <dt>发件人</dt>
+            <dt>{t('mail.from')}</dt>
             <dd>{message.from_address}</dd>
-            <dt>收件人</dt>
+            <dt>{t('mail.to')}</dt>
             <dd>{message.to_address}</dd>
-            <dt>主题</dt>
-            <dd>{message.subject || '(无主题)'}</dd>
-            <dt>时间</dt>
-            <dd>{formatDate(message.created_at)}</dd>
+            <dt>{t('mail.subject')}</dt>
+            <dd>{message.subject || t('mail.noSubject')}</dd>
+            <dt>{t('mail.date')}</dt>
+            <dd>{formatDate(message.created_at, locale)}</dd>
           </dl>
           {message.attachments.length > 0 && (
             <ul className="attachments">
@@ -181,14 +184,16 @@ export function Reader({
               className="body-html"
               sandbox="allow-same-origin"
               srcDoc={emailHtml(message.body_html)}
-              title="邮件正文"
+              title={t('mail.body')}
             />
           ) : (
             <>
-              <pre className="body-text">{quote.visible || '(无正文)'}</pre>
+              <pre className="body-text">
+                {quote.visible || t('mail.noBody')}
+              </pre>
               {quote.quoted && (
                 <details className="quote">
-                  <summary>显示引用</summary>
+                  <summary>{t('mail.showQuoted')}</summary>
                   <pre className="body-text quoted">{quote.quoted}</pre>
                 </details>
               )}

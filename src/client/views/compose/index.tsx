@@ -6,6 +6,7 @@ import { Modal } from '../../components/modal';
 import './style.css';
 
 import { Button } from '../../components/button';
+import { useI18n } from '../../i18n';
 
 export interface ComposeProps {
   title: string;
@@ -41,6 +42,7 @@ export function Compose({
   onSend,
   onDismiss,
 }: ComposeProps) {
+  const { t } = useI18n();
   const toRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -65,7 +67,7 @@ export function Compose({
               busy || !to.trim() || (!text.trim() && !html.includes('<img'))
             }
           >
-            {busy ? '发送中…' : '发送'}
+            {busy ? t('compose.sending') : t('compose.send')}
           </Button>
         </>
       }
@@ -83,15 +85,15 @@ export function Compose({
           className="compose-line"
           value={to}
           onChange={event => onToChange(event.target.value)}
-          placeholder="收件人"
-          aria-label="收件人"
+          placeholder={t('compose.to')}
+          aria-label={t('compose.to')}
         />
         <input
           className="compose-line"
           value={subject}
           onChange={event => onSubjectChange(event.target.value)}
-          placeholder="主题"
-          aria-label="主题"
+          placeholder={t('compose.subject')}
+          aria-label={t('compose.subject')}
         />
         <Editor
           html={html}

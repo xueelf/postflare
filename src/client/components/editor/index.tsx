@@ -11,6 +11,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { type ReactNode, useEffect, useRef } from 'react';
 
 import { readAsDataUrl } from '../../format';
+import { useI18n } from '../../i18n';
 
 import './style.css';
 
@@ -32,6 +33,7 @@ export function Editor({
   onUploadImage,
   toolbarEnd,
 }: EditorProps) {
+  const { t } = useI18n();
   const onChangeRef = useRef(onChange);
   const onUploadImageRef = useRef(onUploadImage);
 
@@ -43,7 +45,7 @@ export function Editor({
       StarterKit.configure({ link: { openOnClick: false } }),
       // 允许 data URL：粘贴与导入的图片先本地预览，上传/保存后替换为应用地址
       Image.configure({ allowBase64: true }),
-      Placeholder.configure({ placeholder: '正文' }),
+      Placeholder.configure({ placeholder: t('compose.body') }),
     ],
     content: html,
     editorProps: {
@@ -135,8 +137,8 @@ export function Editor({
           variant="icon"
           data-active={state.bold}
           onClick={() => editor.chain().focus().toggleBold().run()}
-          aria-label="加粗"
-          title="加粗"
+          aria-label={t('compose.bold')}
+          title={t('compose.bold')}
         >
           <RiBold size={20} aria-hidden />
         </Button>
@@ -144,8 +146,8 @@ export function Editor({
           variant="icon"
           data-active={state.italic}
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          aria-label="斜体"
-          title="斜体"
+          aria-label={t('compose.italic')}
+          title={t('compose.italic')}
         >
           <RiItalic size={20} aria-hidden />
         </Button>
@@ -153,8 +155,8 @@ export function Editor({
           variant="icon"
           data-active={state.underline}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          aria-label="下划线"
-          title="下划线"
+          aria-label={t('compose.underline')}
+          title={t('compose.underline')}
         >
           <RiUnderline size={20} aria-hidden />
         </Button>
@@ -162,8 +164,8 @@ export function Editor({
           variant="icon"
           data-active={state.strike}
           onClick={() => editor.chain().focus().toggleStrike().run()}
-          aria-label="删除线"
-          title="删除线"
+          aria-label={t('compose.strike')}
+          title={t('compose.strike')}
         >
           <RiStrikethrough size={20} aria-hidden />
         </Button>

@@ -1,6 +1,8 @@
 import { RiCloseLine } from '@remixicon/react';
 import { type ReactNode, useEffect, useRef } from 'react';
 
+import { useI18n } from '../../i18n';
+
 import './style.css';
 
 import { Button } from '../button';
@@ -25,6 +27,7 @@ export function Modal({
   footer,
   children,
 }: ModalProps) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
   const opened = useRef(false);
   const lastFocused = useRef<HTMLElement | null>(null);
@@ -120,7 +123,7 @@ export function Modal({
     >
       <DialogHead title={title}>
         {onDismiss && (
-          <Button variant="icon" onClick={onDismiss} aria-label="关闭">
+          <Button variant="icon" onClick={onDismiss} aria-label={t('ui.close')}>
             <RiCloseLine size={20} aria-hidden />
           </Button>
         )}

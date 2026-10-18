@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from '../api';
 import { useToast } from '../components/toast';
+import { type MessageKey, useI18n } from '../i18n';
 
 export interface UserSummary {
   id: string;
@@ -17,22 +18,23 @@ export interface IssuedLink {
   purpose: 'invite' | 'reset';
 }
 
-// 服务端错误码 → 界面文案
-const USER_ERRORS: Record<string, string> = {
-  'username taken': '该用户名已被占用',
-  'invalid username': '用户名不能为空，且不能包含 @',
-  'name is empty': '昵称不能为空',
-  'invalid status': '状态无效',
-  'user has not activated': '该用户尚未设置密码',
-  'cannot modify yourself': '不能修改自己的账号',
-  'cannot delete yourself': '不能删除自己的账号',
-  'mail domain is not configured': '邮件域名未配置',
+// 服务端错误码 → 文案键
+const USER_ERRORS: Record<string, MessageKey> = {
+  'username taken': 'users.errorUsernameTaken',
+  'invalid username': 'users.errorInvalidUsername',
+  'name is empty': 'users.errorNameEmpty',
+  'invalid status': 'users.errorInvalidStatus',
+  'user has not activated': 'users.errorNotActivated',
+  'cannot modify yourself': 'users.errorCannotModifySelf',
+  'cannot delete yourself': 'users.errorCannotDeleteSelf',
+  'mail domain is not configured': 'users.errorMailDomain',
 };
 
 /**
  * 用户管理：列表、新建、启用停用、删除与一次性链接。
  */
 export function useUsers() {
+  const { t } = useI18n();
   const toast = useToast();
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [busy, setBusy] = useState(false);
@@ -49,9 +51,9 @@ export function useUsers() {
   }, [refresh]);
 
   const report = (data: { error?: string }, status: number) => {
-    toast.error(
-      (data.error && USER_ERRORS[data.error]) ?? `操作失败（${status}）`,
-    );
+    const key = data.error ? USER_ERRORS[data.error] : undefined;
+
+    toast.error(key ? t(key) : t('users.actionFailed', { status }));
   };
 
   const create = (username: string, name: string) => {
@@ -78,7 +80,7 @@ export function useUsers() {
       })
       .catch(() => {
         setBusy(false);
-        toast.error('操作失败，请重试');
+        toast.error(t('users.actionFailedRetry'));
 
         return null;
       });
@@ -106,7 +108,7 @@ export function useUsers() {
         return true;
       })
       .catch(() => {
-        toast.error('操作失败，请重试');
+        toast.error(t('users.actionFailedRetry'));
 
         return false;
       });
@@ -128,7 +130,7 @@ export function useUsers() {
         return true;
       })
       .catch(() => {
-        toast.error('操作失败，请重试');
+        toast.error(t('users.actionFailedRetry'));
 
         return false;
       });
@@ -156,7 +158,7 @@ export function useUsers() {
         } as IssuedLink;
       })
       .catch(() => {
-        toast.error('操作失败，请重试');
+        toast.error(t('users.actionFailedRetry'));
 
         return null;
       });

@@ -2,6 +2,7 @@ import PostalMime, { type Attachment } from 'postal-mime';
 
 import { IMAGE_MAX_BYTES } from './api';
 import { readAsDataUrl, textToHtml } from './format';
+import type { MessageKey } from './i18n';
 
 export interface ImportedTemplate {
   name: string;
@@ -11,13 +12,16 @@ export interface ImportedTemplate {
 /**
  * 解析 .eml 为模板草稿：主题作名称，正文取 HTML 部分，内嵌图片转为本地预览（保存时上传）。
  */
-export async function parseTemplateFile(file: File): Promise<ImportedTemplate> {
+export async function parseTemplateFile(
+  file: File,
+  t: (key: MessageKey) => string,
+): Promise<ImportedTemplate> {
   const parsed = await PostalMime.parse(await file.arrayBuffer()).catch(
     () => null,
   );
 
   if (!parsed) {
-    throw new Error('无法解析该文件');
+    throw new Error(t('templates.parseFailed'));
   }
 
   const name = (parsed.subject ?? '').trim();
@@ -26,20 +30,21 @@ export async function parseTemplateFile(file: File): Promise<ImportedTemplate> {
   if (html) {
     return {
       name,
-      bodyHtml: await replaceCidImages(html, parsed.attachments),
+      bodyHtml: await replaceCidImages(html, parsed.attachments, t),
     };
   }
 
   if (parsed.text) {
     return { name, bodyHtml: textToHtml(parsed.text) };
   }
-  throw new Error('邮件里没有正文');
+  throw new Error(t('templates.emlNoBody'));
 }
 
 // cid: 引用的内嵌图片转为 data URL 本地预览；引用不到的图片直接丢弃
 async function replaceCidImages(
   html: string,
   attachments: Attachment[],
+  t: (key: MessageKey) => string,
 ): Promise<string> {
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
@@ -64,7 +69,7 @@ async function replaceCidImages(
     const content = part.content as ArrayBuffer;
 
     if (content.byteLength > IMAGE_MAX_BYTES) {
-      throw new Error('邮件里的图片超过 10MB，无法导入');
+      throw new Error(t('templates.imageTooLarge'));
     }
     image.setAttribute(
       'src',
