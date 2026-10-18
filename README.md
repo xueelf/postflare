@@ -53,17 +53,17 @@ Local values go in a `.dev.vars` file, which overrides the values in `wrangler.j
 MAIL_DOMAIN="example.com"
 ```
 
-| Command                     | Purpose                                             |
-| --------------------------- | --------------------------------------------------- |
-| `bun run dev`               | Development server on `http://127.0.0.1:8787`       |
-| `bun run build`             | Build client assets into `dist/`                    |
-| `bun run deploy`            | Build, apply remote database migrations, and deploy |
-| `bun run db:migrate:local`  | Apply migrations to the local database              |
-| `bun run db:migrate:remote` | Apply migrations to the remote database             |
-| `bun test`                  | Unit tests                                          |
-| `bun run typecheck`         | TypeScript type check                               |
-| `bun run lint`              | ESLint                                              |
-| `bun run format`            | Prettier                                            |
+| Command                     | Purpose                                       |
+| --------------------------- | --------------------------------------------- |
+| `bun run dev`               | Development server on `http://127.0.0.1:8787` |
+| `bun run build`             | Build client assets into `dist/`              |
+| `bun run deploy`            | Apply remote database migrations and deploy   |
+| `bun run db:migrate:local`  | Apply migrations to the local database        |
+| `bun run db:migrate:remote` | Apply migrations to the remote database       |
+| `bun test`                  | Unit tests                                    |
+| `bun run typecheck`         | TypeScript type check                         |
+| `bun run lint`              | ESLint                                        |
+| `bun run format`            | Prettier                                      |
 
 Worker binding types are generated from `wrangler.jsonc` into `types/` by `bun run types`, which `dev` and `typecheck` run for you.
 

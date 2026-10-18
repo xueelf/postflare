@@ -57,7 +57,7 @@ MAIL_DOMAIN="example.com"
 | --------------------------- | ---------------------------------------- |
 | `bun run dev`               | 开发服务器，监听 `http://127.0.0.1:8787` |
 | `bun run build`             | 构建客户端资源到 `dist/`                 |
-| `bun run deploy`            | 构建、应用远端数据库迁移并部署           |
+| `bun run deploy`            | 应用远端数据库迁移并部署                 |
 | `bun run db:migrate:local`  | 应用迁移到本地数据库                     |
 | `bun run db:migrate:remote` | 应用迁移到远端数据库                     |
 | `bun test`                  | 单元测试                                 |
