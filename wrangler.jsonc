@@ -23,12 +23,12 @@
       "binding": "DB",
       "database_name": "postflare",
       /*
-       * Filled in by the Deploy to Cloudflare form.
-       * For a manual deploy, run `wrangler d1 create postflare`.
-       * Put the printed id here.
-       * Not needed for local development.
+       * Left out on purpose.
+       * The deploy flow creates the database and writes the id back here.
+       * For a manual deploy, uncomment the line below.
+       * Replace the placeholder with the id from `wrangler d1 create postflare`.
        */
-      "database_id": "<DATABASE_ID>",
+      // "database_id": "<DATABASE_ID>",
     },
   ],
   "r2_buckets": [
