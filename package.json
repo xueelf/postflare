@@ -6,12 +6,18 @@
   "author": "Yuki <admin@yuki.sh>",
   "type": "module",
   "scripts": {
-    "format": "prettier \"**/*.{json,md,ts,yaml,yml}\" --write --experimental-cli",
-    "format:check": "prettier \"**/*.{json,md,ts,yaml,yml}\" --check --experimental-cli",
+    "build": "bun build index.html --outdir dist",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "bun run build && bun run db:migrate:remote && wrangler deploy",
+    "dev": "bun run types && wrangler dev",
+    "format": "prettier \"**/*.{json,md,ts,tsx,yaml,yml}\" --write --experimental-cli",
+    "format:check": "prettier \"**/*.{json,md,ts,tsx,yaml,yml}\" --check --experimental-cli",
     "lint": "eslint --cache",
     "lint:fix": "eslint --fix --cache",
     "prepare": "husky",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun run types && tsc --noEmit",
+    "types": "wrangler types ./types/worker-configuration.d.ts"
   },
   "dependencies": {
     "@remixicon/react": "^4.9.0",
