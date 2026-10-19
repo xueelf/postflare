@@ -61,9 +61,10 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* 头部用共用的 dialog-head，内容紧接标题，与弹窗同一套留白 */
+/* 头部用共用的 dialog-head，内容区自带四边内边距，
+   与 AntD 的 card-body、MUI 的 CardContent 一致，块间距由内容区的内边距承担 */
 .auth-card-body {
-  padding: 0 16px 16px;
+  padding: 16px;
 }
 
 /* 只读的域名行：域名 + 就绪状态图标 */
@@ -109,10 +110,6 @@
   to {
     transform: rotate(360deg);
   }
-}
-
-.auth-notice-slot {
-  margin-top: 16px;
 }
 
 .auth-snippet {

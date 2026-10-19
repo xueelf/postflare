@@ -185,12 +185,12 @@ export function Auth({
                 }
               >
                 {domainError ? (
-                  <Notice role="alert" className="auth-notice-slot">
+                  <Notice role="alert">
                     <strong>{t('auth.domainCheckFailed')}</strong>
                     <span>{domainError}</span>
                   </Notice>
                 ) : !mailDomain ? (
-                  <Notice className="auth-notice-slot">
+                  <Notice>
                     <strong>{t('auth.errorMailDomain')}</strong>
                     <span>{t('auth.mailDomainMissingHint')}</span>
                     <code className="auth-snippet">

@@ -1,11 +1,6 @@
 .modal {
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 48px);
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-container);
-  background: var(--surface);
-  color: var(--text);
   box-shadow: var(--shadow-md);
   overflow: hidden;
 }
@@ -13,10 +8,6 @@
 .modal[open] {
   display: flex;
   flex-direction: column;
-}
-
-.modal::backdrop {
-  background: rgba(0, 0, 0, 0.4);
 }
 
 /* 尺寸分三档，sm 用于消息与表单类，lg 用于固定高度的编辑类，page 用于高度随内容的列表类，

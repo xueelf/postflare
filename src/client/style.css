@@ -68,6 +68,12 @@
   --textarea-line-height: 22px;
   --textarea-padding: 8px 10px;
   --textarea-placeholder-color: var(--faint);
+  --dialog-backdrop-background-color: rgba(0, 0, 0, 0.4);
+  --dialog-background-color: var(--surface);
+  --dialog-border-radius: var(--radius-container);
+  --dialog-border-width: 0;
+  --dialog-color: var(--text);
+  --dialog-padding: 0;
   --hr-border-block-start-color: var(--line);
   --hr-margin-block: 0;
   --iframe-border-width: 0;
@@ -77,6 +83,11 @@
   --popover-border-radius: var(--radius-container);
   --popover-color: var(--text);
   --popover-padding: 4px;
+  --th-border-block-end-color: var(--line);
+  --th-font-weight: 600;
+  --th-padding: 8px 12px;
+  --td-border-block-end-color: var(--line);
+  --td-padding: 12px;
   --fieldset-border-width: 0;
   --fieldset-margin: 0;
   --h1-font-size: 14px;
@@ -209,11 +220,6 @@ hr {
 .compose-line:focus {
   outline: none;
   border-color: var(--accent);
-}
-
-/* 首个输入行紧贴标题：标题到内容合计 16（头部下 12 + 4），与 Material 的标题到内容间距一致 */
-.compose-form > .compose-line:first-child {
-  padding-top: 4px;
 }
 
 /* 全高表单：内容排在 body 的留白内，编辑器自己撑满剩余高度 */
@@ -369,7 +375,7 @@ button.message-identity {
 }
 
 .reader-actions li {
-  display: contents;
+  display: flex;
 }
 
 .reader-back {
@@ -390,6 +396,7 @@ button.message-identity {
   overflow-y: auto;
 }
 
+/* 邮件正文按白底渲染，明暗模式一致（来信的 HTML 假定白底，同 Gmail、Outlook 的处理） */
 .body-html {
   display: block;
   width: 100%;
