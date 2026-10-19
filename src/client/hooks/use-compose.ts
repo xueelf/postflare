@@ -285,6 +285,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         }
         const data = (await res.json()) as { id: string };
 
+        toast.success(t('compose.sent'));
         resetCompose();
         setComposeBusy(false);
         refreshList();

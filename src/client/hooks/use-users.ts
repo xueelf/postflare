@@ -79,6 +79,8 @@ export function useUsers() {
           return null;
         }
 
+        toast.success(t('users.linkCreated'));
+
         return {
           url: data.link,
           purpose: 'invite',
@@ -103,6 +105,8 @@ export function useUsers() {
       body: JSON.stringify({ status }),
     })
       .then(async res => {
+        setBusy(false);
+
         if (!res.ok) {
           report(
             (await res.json().catch(() => ({}))) as { error?: string },
@@ -111,11 +115,15 @@ export function useUsers() {
 
           return false;
         }
+        toast.success(
+          t(status === 'disabled' ? 'users.userDisabled' : 'users.userEnabled'),
+        );
         refresh();
 
         return true;
       })
       .catch(() => {
+        setBusy(false);
         toast.error(t('users.actionFailedRetry'));
 
         return false;
@@ -123,8 +131,12 @@ export function useUsers() {
   };
 
   const remove = (id: string) => {
+    setBusy(true);
+
     return apiFetch(`/api/users/${id}`, { method: 'DELETE' })
       .then(async res => {
+        setBusy(false);
+
         if (!res.ok) {
           report(
             (await res.json().catch(() => ({}))) as { error?: string },
@@ -133,11 +145,13 @@ export function useUsers() {
 
           return false;
         }
+        toast.success(t('users.userDeleted'));
         refresh();
 
         return true;
       })
       .catch(() => {
+        setBusy(false);
         toast.error(t('users.actionFailedRetry'));
 
         return false;
@@ -145,6 +159,8 @@ export function useUsers() {
   };
 
   const issueLink = (id: string) => {
+    setBusy(true);
+
     return apiFetch(`/api/users/${id}/link`, { method: 'POST' })
       .then(async res => {
         setBusy(false);
@@ -159,9 +175,12 @@ export function useUsers() {
 
           return null;
         }
+        toast.success(t('users.linkCreated'));
+
         return { url: data.link, purpose: 'reset' } as IssuedLink;
       })
       .catch(() => {
+        setBusy(false);
         toast.error(t('users.actionFailedRetry'));
 
         return null;

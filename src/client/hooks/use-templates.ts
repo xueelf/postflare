@@ -153,6 +153,7 @@ export function useTemplates(
         }
         const data = (await res.json()) as { id: string };
 
+        toast.success(t('templates.saved'));
         setSaving(false);
 
         if (editing.id) {
@@ -182,6 +183,7 @@ export function useTemplates(
 
               return;
             }
+            toast.success(t('templates.deleted'));
             navigate(viewPath('templates', null, route.q), { replace: true });
             refreshTemplates();
           })

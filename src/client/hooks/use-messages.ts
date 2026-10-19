@@ -2,11 +2,20 @@ import { useEffect, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
 import { apiFetch } from '../api';
-import { useI18n } from '../i18n';
+import { useToast } from '../components/toast';
+import { type MessageKey, useI18n } from '../i18n';
 import { type MailRoute, type View, MAILBOX_VIEWS, viewPath } from '../route';
 
 import type { ConfirmRequest } from './use-confirm';
 import { useDebouncedValue } from './use-debounced';
+
+// 移动目标 → 成功提示
+const MOVE_TOASTS: Record<'inbox' | 'sent' | 'spam' | 'trash', MessageKey> = {
+  inbox: 'mail.restoredToInbox',
+  sent: 'mail.restoredToSent',
+  spam: 'mail.movedToSpam',
+  trash: 'mail.movedToTrash',
+};
 
 export interface MessageSummary {
   id: string;
@@ -44,6 +53,7 @@ export function useMessages(
   askConfirm: (request: ConfirmRequest) => void,
 ) {
   const { t } = useI18n();
+  const toast = useToast();
   const [search, setSearch] = useState(route.q);
   const query = useDebouncedValue(search.trim(), 300);
   const [listVersion, setListVersion] = useState(0);
@@ -186,11 +196,19 @@ export function useMessages(
         const next = neighborId(id);
 
         apiFetch(`/api/drafts/${id}`, { method: 'DELETE' })
-          .then(() => {
+          .then(res => {
+            if (!res.ok) {
+              toast.error(t('mail.actionFailedRetry'));
+
+              return;
+            }
+            toast.success(t('mail.draftDiscarded'));
             refreshList();
             navigate(viewPath('drafts', next, route.q), { replace: true });
           })
-          .catch(() => {});
+          .catch(() => {
+            toast.error(t('mail.actionFailedRetry'));
+          });
       },
     });
   };
@@ -206,11 +224,19 @@ export function useMessages(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mailbox }),
     })
-      .then(() => {
+      .then(res => {
+        if (!res.ok) {
+          toast.error(t('mail.actionFailedRetry'));
+
+          return;
+        }
+        toast.success(t(MOVE_TOASTS[mailbox]));
         refreshList();
         navigate(viewPath(route.view, next, route.q), { replace: true });
       })
-      .catch(() => {});
+      .catch(() => {
+        toast.error(t('mail.actionFailedRetry'));
+      });
   };
 
   const purgeMessage = (id: string) => {
@@ -223,11 +249,19 @@ export function useMessages(
         const next = neighborId(id);
 
         apiFetch(`/api/messages/${id}`, { method: 'DELETE' })
-          .then(() => {
+          .then(res => {
+            if (!res.ok) {
+              toast.error(t('mail.actionFailedRetry'));
+
+              return;
+            }
+            toast.success(t('mail.purged'));
             refreshList();
             navigate(viewPath(route.view, next, route.q), { replace: true });
           })
-          .catch(() => {});
+          .catch(() => {
+            toast.error(t('mail.actionFailedRetry'));
+          });
       },
     });
   };
@@ -242,7 +276,15 @@ export function useMessages(
       danger: true,
       action: () => {
         apiFetch(`/api/messages?mailbox=${mailbox}`, { method: 'DELETE' })
-          .then(() => {
+          .then(res => {
+            if (!res.ok) {
+              toast.error(t('mail.actionFailedRetry'));
+
+              return;
+            }
+            toast.success(
+              t(mailbox === 'spam' ? 'mail.spamEmptied' : 'mail.trashEmptied'),
+            );
             refreshList();
 
             if (route.messageId) {
@@ -251,7 +293,9 @@ export function useMessages(
               });
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            toast.error(t('mail.actionFailedRetry'));
+          });
       },
     });
   };
