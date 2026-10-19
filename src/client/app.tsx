@@ -218,6 +218,9 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
   const mailProps: Omit<MailProps, 'view'> = {
     messages: messages.messages,
+    nextCursor: messages.nextCursor,
+    loadingMore: messages.loadingMore,
+    onLoadMore: messages.loadMore,
     search: messages.search,
     onSearch: messages.setSearch,
     onOpen: message => {
