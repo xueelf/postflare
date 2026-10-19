@@ -33,17 +33,13 @@
 }
 
 .users-table th {
-  padding: 8px 12px;
   color: var(--muted);
   font-size: 12px;
   line-height: 18px;
-  font-weight: 600;
   text-align: left;
 }
 
 .users-table td {
-  padding: 12px;
-  border-top: 1px solid var(--line);
   vertical-align: middle;
 }
 
@@ -103,7 +99,7 @@
 }
 
 .users-actions li {
-  display: contents;
+  display: flex;
 }
 
 .users-sr {
@@ -124,24 +120,32 @@
 .users-link {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding-right: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface-muted);
+  gap: 8px;
 }
 
 .users-link input {
+  --input-background-color: var(--surface-muted);
+  --input-padding: 0 10px;
   flex: 1;
   min-width: 0;
   height: 40px;
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
+  text-overflow: ellipsis;
 }
 
-.users-link input:focus {
-  outline: none;
+/* 结果弹窗里的链接信息，标签列随最长标签对齐 */
+.users-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.users-facts dt {
+  color: var(--muted);
+}
+
+.users-facts dd {
+  margin: 0;
 }

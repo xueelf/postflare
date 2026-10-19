@@ -3,6 +3,8 @@
   inset: auto;
   margin: 0;
   min-width: anchor-size(width);
+  /* 靠近视口边缘时翻到锚点另一侧，避免弹层溢出 */
+  position-try-fallbacks: flip-inline;
   box-shadow: var(--shadow-sm);
 }
 
@@ -11,17 +13,18 @@
   flex-direction: column;
 }
 
-/* 底边弹层留 8px，让弹层圆角与下方按钮圆角相切（圆心纵向对齐），避免按钮底色从缺口透出 */
+/* 底边弹层留 12px（与头部下内边距一致），顶边落在头部底边：移动端是分割线，桌面侧栏是发邮件按钮顶边。
+   与下方按钮同用控件圆角，两角重合，按钮底色不会从缺口透出 */
 .popover-bottom {
   top: anchor(bottom);
   left: anchor(left);
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .popover-top {
   bottom: anchor(top);
   left: anchor(left);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 /* 条目样式，按钮与链接共用 */
@@ -37,7 +40,6 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
   height: 40px;
   padding: 0 10px;
   border: 0;
@@ -47,6 +49,7 @@
   font-size: 14px;
   text-align: left;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
 }
 
