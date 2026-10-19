@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { emailHtml } from '../format';
+import { emailHtml } from '#/client/format';
 
 export interface BodyFrameProps {
   html: string;

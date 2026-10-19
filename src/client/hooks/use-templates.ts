@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
-import { apiFetch } from '../api';
-import { useToast } from '../components/toast';
-import { templateHtml } from '../format';
-import { useI18n } from '../i18n';
-import { type MailRoute, viewPath } from '../route';
-import { parseTemplateFile } from '../template-import';
+import { apiFetch } from '#/client/api';
+import { useToast } from '#/client/components/toast';
+import { templateHtml } from '#/client/format';
+import { useI18n } from '#/client/i18n';
+import { type MailRoute, viewPath } from '#/client/route';
+import { parseTemplateFile } from '#/client/template-import';
 
 import type { ConfirmRequest } from './use-confirm';
 

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
-import { apiFetch, IMAGE_MAX_BYTES } from '../api';
-import { useToast } from '../components/toast';
-import { dateTimeValue, formatTime, textToHtml } from '../format';
-import { useI18n } from '../i18n';
-import { type MailRoute, viewPath } from '../route';
+import { apiFetch, IMAGE_MAX_BYTES } from '#/client/api';
+import { useToast } from '#/client/components/toast';
+import { dateTimeValue, formatTime, textToHtml } from '#/client/format';
+import { useI18n } from '#/client/i18n';
+import { type MailRoute, viewPath } from '#/client/route';
 
 import type { MessageDetail } from './use-messages';
 

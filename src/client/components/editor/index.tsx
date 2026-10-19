@@ -10,12 +10,12 @@ import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { type ReactNode, useEffect, useRef } from 'react';
 
-import { readAsDataUrl } from '../../format';
-import { useI18n } from '../../i18n';
+import { readAsDataUrl } from '#/client/format';
+import { useI18n } from '#/client/i18n';
 
 import './style.css';
 
-import { Button } from '../button';
+import { Button } from '#/client/components/button';
 
 export interface EditorProps {
   html: string;

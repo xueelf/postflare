@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { validRecipients } from '../src/worker/compose';
+import { validRecipients } from '#/worker/compose';
 
 test('validRecipients 接受单个与逗号分隔的地址', () => {
   expect(validRecipients('me@example.com')).toBe(true);

@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
 
-import { Editor } from '../../components/editor';
-import { Modal } from '../../components/modal';
+import { Editor } from '#/client/components/editor';
+import { Modal } from '#/client/components/modal';
 
 import './style.css';
 
-import { Button } from '../../components/button';
-import { useI18n } from '../../i18n';
+import { Button } from '#/client/components/button';
+import { useI18n } from '#/client/i18n';
 
 export interface ComposeProps {
   title: string;

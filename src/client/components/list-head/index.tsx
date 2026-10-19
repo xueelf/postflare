@@ -1,5 +1,5 @@
-import { AccountMenu } from '../account-menu';
-import { PanelHead } from '../panel-head';
+import { AccountMenu } from '#/client/components/account-menu';
+import { PanelHead } from '#/client/components/panel-head';
 
 export interface ListHeadProps {
   collapsed: boolean;

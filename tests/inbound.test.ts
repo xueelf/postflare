@@ -1,10 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import {
-  BODY_MAX_BYTES,
-  capBody,
-  normalizeMessageId,
-} from '../src/worker/inbound';
+import { BODY_MAX_BYTES, capBody, normalizeMessageId } from '#/worker/inbound';
 
 test('normalizeMessageId 去掉包裹的尖括号', () => {
   expect(normalizeMessageId('<abc@example.com>')).toBe('abc@example.com');

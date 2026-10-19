@@ -12,15 +12,15 @@ import {
 } from '@remixicon/react';
 import { type ReactNode } from 'react';
 
-import { ActionMenu } from '../../components/action-menu';
-import { BodyFrame } from '../../components/body-frame';
-import { Button } from '../../components/button';
-import { EmptyState } from '../../components/empty-state';
-import { MessageView } from '../../components/message-view';
-import { dateTimeValue, formatDate, formatSize } from '../../format';
-import type { MessageDetail } from '../../hooks/use-messages';
-import { useI18n } from '../../i18n';
-import type { View } from '../../route';
+import { ActionMenu } from '#/client/components/action-menu';
+import { BodyFrame } from '#/client/components/body-frame';
+import { Button } from '#/client/components/button';
+import { EmptyState } from '#/client/components/empty-state';
+import { MessageView } from '#/client/components/message-view';
+import { dateTimeValue, formatDate, formatSize } from '#/client/format';
+import type { MessageDetail } from '#/client/hooks/use-messages';
+import { useI18n } from '#/client/i18n';
+import type { View } from '#/client/route';
 
 export interface ReaderProps {
   message: MessageDetail | null;

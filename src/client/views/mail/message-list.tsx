@@ -1,12 +1,12 @@
 import { RiMailLine } from '@remixicon/react';
 
-import { EmptyState } from '../../components/empty-state';
-import { ListHead } from '../../components/list-head';
-import { ListRow } from '../../components/list-row';
-import { dateTimeValue, formatListDate } from '../../format';
-import type { MessageSummary } from '../../hooks/use-messages';
-import { type MessageKey, type MessageParams, useI18n } from '../../i18n';
-import type { View } from '../../route';
+import { EmptyState } from '#/client/components/empty-state';
+import { ListHead } from '#/client/components/list-head';
+import { ListRow } from '#/client/components/list-row';
+import { dateTimeValue, formatListDate } from '#/client/format';
+import type { MessageSummary } from '#/client/hooks/use-messages';
+import { type MessageKey, type MessageParams, useI18n } from '#/client/i18n';
+import type { View } from '#/client/route';
 
 export interface MessageListProps {
   view: View;

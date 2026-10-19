@@ -1,12 +1,12 @@
 import { RiCloseLine } from '@remixicon/react';
 import { type ReactNode, useEffect, useRef } from 'react';
 
-import { useI18n } from '../../i18n';
+import { useI18n } from '#/client/i18n';
 
 import './style.css';
 
-import { Button } from '../button';
-import { DialogHead } from '../dialog-head';
+import { Button } from '#/client/components/button';
+import { DialogHead } from '#/client/components/dialog-head';
 
 export interface ModalProps {
   title: string;

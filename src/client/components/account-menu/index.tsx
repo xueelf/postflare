@@ -1,9 +1,9 @@
 import { RiFileTextLine, RiLogoutBoxRLine } from '@remixicon/react';
 
-import { displayName } from '../../format';
-import { useI18n } from '../../i18n';
-import { Avatar } from '../avatar';
-import { Popover } from '../popover';
+import { Avatar } from '#/client/components/avatar';
+import { Popover } from '#/client/components/popover';
+import { displayName } from '#/client/format';
+import { useI18n } from '#/client/i18n';
 
 import './style.css';
 

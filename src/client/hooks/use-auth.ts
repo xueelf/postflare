@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
-import type { DomainStatus } from '../../worker/domains';
-import { apiFetch, setUnauthorizedHandler } from '../api';
-import { useToast } from '../components/toast';
+import { apiFetch, setUnauthorizedHandler } from '#/client/api';
+import { useToast } from '#/client/components/toast';
 import {
   type MessageKey,
   type MessageParams,
   initialLocale,
   matchLocale,
   translate,
-} from '../i18n';
+} from '#/client/i18n';
+import type { DomainStatus } from '#/worker/domains';
 
 export interface AuthState {
   setupComplete: boolean;

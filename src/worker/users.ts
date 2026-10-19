@@ -1,5 +1,5 @@
-import { INVITE_MAX_TTL_SECONDS, INVITE_MAX_USES } from '../invites';
-import { DEFAULT_LOCALE, isLocale } from '../locales';
+import { INVITE_MAX_TTL_SECONDS, INVITE_MAX_USES } from '#/invites';
+import { DEFAULT_LOCALE, isLocale } from '#/locales';
 
 import {
   type AuthUser,

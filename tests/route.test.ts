@@ -5,7 +5,7 @@ import {
   isTemplateDialog,
   parseRoute,
   viewPath,
-} from '../src/client/route';
+} from '#/client/route';
 
 test('parseRoute 识别五个文件夹与其中的邮件', () => {
   expect(parseRoute('/inbox')).toEqual({ view: 'inbox', messageId: null });

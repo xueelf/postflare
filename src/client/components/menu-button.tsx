@@ -1,6 +1,6 @@
 import { RiMenuLine } from '@remixicon/react';
 
-import { useI18n } from '../i18n';
+import { useI18n } from '#/client/i18n';
 
 import { Button } from './button';
 

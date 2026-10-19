@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { useI18n } from '../i18n';
+import { useI18n } from '#/client/i18n';
 
 import { type SidebarProps, Sidebar } from './sidebar';
 

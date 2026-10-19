@@ -14,11 +14,11 @@ import {
 } from '@remixicon/react';
 import { type ReactNode, Fragment } from 'react';
 
-import pkg from '../../../package.json';
-import { AccountMenu } from '../components/account-menu';
-import { Popover } from '../components/popover';
-import { type MessageKey, useI18n } from '../i18n';
-import type { View } from '../route';
+import { AccountMenu } from '#/client/components/account-menu';
+import { Popover } from '#/client/components/popover';
+import { type MessageKey, useI18n } from '#/client/i18n';
+import type { View } from '#/client/route';
+import pkg from '~/package.json';
 
 export interface SidebarProps {
   collapsed: boolean;

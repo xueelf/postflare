@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Button } from '../button';
+import { Button } from '#/client/components/button';
 
 export interface ActionMenuProps {
   className?: string;

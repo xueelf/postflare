@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { FormItem } from '../../components/form-item';
-import { useI18n } from '../../i18n';
+import { FormItem } from '#/client/components/form-item';
+import { useI18n } from '#/client/i18n';
 
 export interface ConfirmPasswordFieldProps {
   password: string;

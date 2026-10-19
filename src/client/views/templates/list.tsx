@@ -1,13 +1,13 @@
 import { RiFileTextLine } from '@remixicon/react';
 import { useMemo } from 'react';
 
-import { Button } from '../../components/button';
-import { EmptyState } from '../../components/empty-state';
-import { ListHead } from '../../components/list-head';
-import { ListRow } from '../../components/list-row';
-import { dateTimeValue, formatListDate, htmlToText } from '../../format';
-import type { Template } from '../../hooks/use-templates';
-import { useI18n } from '../../i18n';
+import { Button } from '#/client/components/button';
+import { EmptyState } from '#/client/components/empty-state';
+import { ListHead } from '#/client/components/list-head';
+import { ListRow } from '#/client/components/list-row';
+import { dateTimeValue, formatListDate, htmlToText } from '#/client/format';
+import type { Template } from '#/client/hooks/use-templates';
+import { useI18n } from '#/client/i18n';
 
 export interface TemplateListProps {
   templates: Template[];

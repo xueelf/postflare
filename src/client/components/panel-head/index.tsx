@@ -1,9 +1,9 @@
 import { RiMenuLine, RiSearchLine } from '@remixicon/react';
 import type { ReactNode } from 'react';
 
-import { useI18n } from '../../i18n';
-import { Button } from '../button';
-import { MenuButton } from '../menu-button';
+import { Button } from '#/client/components/button';
+import { MenuButton } from '#/client/components/menu-button';
+import { useI18n } from '#/client/i18n';
 
 export interface PanelHeadProps {
   collapsed: boolean;

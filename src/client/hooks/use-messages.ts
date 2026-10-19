@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
-import { apiFetch } from '../api';
-import { useToast } from '../components/toast';
-import { type MessageKey, useI18n } from '../i18n';
-import { type MailRoute, type View, MAILBOX_VIEWS, viewPath } from '../route';
+import { apiFetch } from '#/client/api';
+import { useToast } from '#/client/components/toast';
+import { type MessageKey, useI18n } from '#/client/i18n';
+import {
+  type MailRoute,
+  type View,
+  MAILBOX_VIEWS,
+  viewPath,
+} from '#/client/route';
 
 import type { ConfirmRequest } from './use-confirm';
 import { useDebouncedValue } from './use-debounced';
