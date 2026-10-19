@@ -2,7 +2,7 @@ import type { AttachmentRow } from './attachments';
 import { chunks, DB_PARAM_LIMIT, deleteObjects } from './batch';
 import { badRequest, notFound, readJson } from './http';
 
-const LIST_LIMIT = 100;
+const LIST_PAGE_SIZE = 30;
 const MAILBOXES = ['inbox', 'sent', 'drafts', 'spam', 'trash'];
 const MOVE_TARGETS = ['inbox', 'sent', 'spam', 'trash'];
 const EMPTY_TARGETS = ['spam', 'trash'];
@@ -18,6 +18,34 @@ interface MessageListRow {
   subject: string;
   created_at: string;
   updated_at: string;
+  row_id: number;
+}
+
+interface ListCursor {
+  sort: string;
+  rowId: number;
+}
+
+/** 游标由服务端生成、客户端原样回传，排序键与 rowid 一起定位下一页的起点。 */
+export function formatListCursor(sort: string, rowId: number): string {
+  return `${sort}|${rowId}`;
+}
+
+export function parseListCursor(value: string | null): ListCursor | null {
+  if (!value) {
+    return null;
+  }
+  const index = value.lastIndexOf('|');
+
+  if (index <= 0) {
+    return null;
+  }
+  const rowId = Number(value.slice(index + 1));
+
+  if (!Number.isInteger(rowId)) {
+    return null;
+  }
+  return { sort: value.slice(0, index), rowId };
 }
 
 export async function listMessages(
@@ -32,6 +60,14 @@ export async function listMessages(
   }
 
   const query = url.searchParams.get('q')?.trim() ?? '';
+  const order: 'created_at' | 'updated_at' =
+    mailbox === 'drafts' ? 'updated_at' : 'created_at';
+  const rawCursor = url.searchParams.get('cursor');
+  const cursor = parseListCursor(rawCursor);
+
+  if (rawCursor !== null && !cursor) {
+    return badRequest('invalid cursor');
+  }
   // 用 instr 做字面子串匹配，LIKE 的模式有 50 字节上限，且转义通配符后长度会翻倍
   const searchClause = query
     ? `AND (instr(lower(subject), lower(?)) > 0
@@ -39,23 +75,38 @@ export async function listMessages(
             OR instr(lower(to_address), lower(?)) > 0
             OR instr(lower(body_text), lower(?)) > 0)`
     : '';
-  const order = mailbox === 'drafts' ? 'updated_at' : 'created_at';
+  // 排序键相同的行用 rowid 继续排序，游标也要带上 rowid 才不会跳行或重复
+  const cursorClause = cursor
+    ? `AND (${order} < ? OR (${order} = ? AND rowid < ?))`
+    : '';
 
   const statement = env.DB.prepare(
     `SELECT id, mailbox, direction, seen, from_address, from_name, to_address, subject,
-            created_at, updated_at
+            created_at, updated_at, rowid AS row_id
      FROM messages
-     WHERE user_id = ? AND mailbox = ? ${searchClause}
+     WHERE user_id = ? AND mailbox = ? ${searchClause} ${cursorClause}
      ORDER BY ${order} DESC, rowid DESC
-     LIMIT ${LIST_LIMIT}`,
+     LIMIT ${LIST_PAGE_SIZE + 1}`,
   );
-  const bound = query
-    ? statement.bind(userId, mailbox, query, query, query, query)
-    : statement.bind(userId, mailbox);
+  const bound = statement.bind(
+    userId,
+    mailbox,
+    ...(query ? [query, query, query, query] : []),
+    ...(cursor ? [cursor.sort, cursor.sort, cursor.rowId] : []),
+  );
 
   const { results } = await bound.all<MessageListRow>();
+  const page = results.slice(0, LIST_PAGE_SIZE);
+  const last = page[page.length - 1];
+  const next =
+    results.length > LIST_PAGE_SIZE && last
+      ? formatListCursor(last[order], last.row_id)
+      : null;
 
-  return Response.json(results);
+  return Response.json({
+    messages: page.map(({ row_id: _rowId, ...message }) => message),
+    next,
+  });
 }
 
 interface MessageRow {

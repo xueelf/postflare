@@ -1,4 +1,5 @@
 import { RiMailLine } from '@remixicon/react';
+import { useEffect, useRef } from 'react';
 
 import { EmptyState } from '#/client/components/empty-state';
 import { ListHead } from '#/client/components/list-head';
@@ -11,6 +12,9 @@ import type { View } from '#/client/route';
 export interface MessageListProps {
   view: View;
   messages: MessageSummary[];
+  nextCursor: string | null;
+  loadingMore: boolean;
+  onLoadMore: () => void;
   search: string;
   onSearch: (value: string) => void;
   onOpen: (message: MessageSummary) => void;
@@ -41,6 +45,9 @@ function correspondent(
 export function MessageList({
   view,
   messages,
+  nextCursor,
+  loadingMore,
+  onLoadMore,
   search,
   onSearch,
   onOpen,
@@ -54,6 +61,31 @@ export function MessageList({
   onLogout,
 }: MessageListProps) {
   const { locale, t } = useI18n();
+  const sentinel = useRef<HTMLLIElement>(null);
+  const loadMoreRef = useRef(onLoadMore);
+
+  loadMoreRef.current = onLoadMore;
+
+  // 触底前 200px 开始取下一页，避免滚动到底后等待
+  useEffect(() => {
+    const node = sentinel.current;
+
+    if (!node) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          loadMoreRef.current();
+        }
+      },
+      { rootMargin: '200px 0px' },
+    );
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [nextCursor]);
 
   return (
     <section className="panel list-pane" aria-label={t('mail.list')}>
@@ -98,6 +130,11 @@ export function MessageList({
               />
             );
           })}
+          {nextCursor && (
+            <li ref={sentinel} className="list-more" role="status">
+              {loadingMore ? t('common.loading') : ''}
+            </li>
+          )}
         </ul>
       )}
     </section>

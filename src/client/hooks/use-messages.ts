@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
 import { apiFetch } from '#/client/api';
@@ -63,6 +63,11 @@ export function useMessages(
   const query = useDebouncedValue(search.trim(), 300);
   const [listVersion, setListVersion] = useState(0);
   const [messages, setMessages] = useState<MessageSummary[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // 列表请求的视图与搜索词，触底加载的旧响应据此作废
+  const listKeyRef = useRef('');
+  const loadingMoreRef = useRef(false);
   const [counts, setCounts] = useState({
     unread: 0,
     drafts: 0,
@@ -110,15 +115,61 @@ export function useMessages(
     const controller = new AbortController();
     const suffix = route.q ? `&q=${encodeURIComponent(route.q)}` : '';
 
+    listKeyRef.current = `${route.view}|${route.q}|${listVersion}`;
+
     apiFetch(`/api/messages?mailbox=${route.view}${suffix}`, {
       signal: controller.signal,
     })
-      .then(res => res.json<MessageSummary[]>())
-      .then(data => setMessages(data))
+      .then(res =>
+        res.json<{ messages: MessageSummary[]; next: string | null }>(),
+      )
+      .then(data => {
+        setMessages(data.messages);
+        setNextCursor(data.next);
+      })
       .catch(() => {});
 
     return () => controller.abort();
   }, [ready, route.view, route.q, listVersion]);
+
+  // 触底加载下一页，视图、搜索词或列表刷新后旧响应直接丢弃
+  const loadMore = () => {
+    if (!nextCursor || loadingMoreRef.current) {
+      return;
+    }
+    const key = listKeyRef.current;
+    const cursor = nextCursor;
+    const suffix = route.q ? `&q=${encodeURIComponent(route.q)}` : '';
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    apiFetch(
+      `/api/messages?mailbox=${route.view}${suffix}&cursor=${encodeURIComponent(cursor)}`,
+    )
+      .then(res =>
+        res.json<{ messages: MessageSummary[]; next: string | null }>(),
+      )
+      .then(data => {
+        if (listKeyRef.current !== key) {
+          return;
+        }
+        setMessages(current => {
+          const seen = new Set(current.map(message => message.id));
+
+          return [
+            ...current,
+            ...data.messages.filter(message => !seen.has(message.id)),
+          ];
+        });
+        setNextCursor(data.next);
+      })
+      .catch(() => {})
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  };
 
   // 打开的邮件由路由驱动，确认存在且属于当前视图后再标记已读
   useEffect(() => {
@@ -209,6 +260,7 @@ export function useMessages(
             }
             toast.success(t('mail.draftDiscarded'));
             refreshList();
+
             navigate(viewPath('drafts', next, route.q), { replace: true });
           })
           .catch(() => {
@@ -237,6 +289,7 @@ export function useMessages(
         }
         toast.success(t(MOVE_TOASTS[mailbox]));
         refreshList();
+
         navigate(viewPath(route.view, next, route.q), { replace: true });
       })
       .catch(() => {
@@ -289,6 +342,7 @@ export function useMessages(
             }
             toast.success(t('mail.purged'));
             refreshList();
+
             navigate(viewPath(route.view, next, route.q), { replace: true });
           })
           .catch(() => {
@@ -336,6 +390,9 @@ export function useMessages(
     search,
     setSearch,
     messages,
+    nextCursor,
+    loadingMore,
+    loadMore,
     counts,
     openMessage,
     refreshList,
