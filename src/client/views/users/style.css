@@ -17,19 +17,46 @@
   white-space: nowrap;
 }
 
-/* 空状态要能撑满内容区居中，表格与面板左右各留 16，和列表行一致 */
+/* 空状态要能撑满内容区居中；左右留白放在滚动容器外，滚动内容不会越过留白 */
 .users-pane .panel-body {
   display: flex;
   flex-direction: column;
-  padding: 0 16px;
+  padding: 0 var(--page-gap);
+}
+
+/* 横向滚动由表格外层承担：滚动区域与面板留白同宽，固定列和内容都不会越过留白 */
+.users-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  /* 表格的横向溢出不能撑宽页面，否则滑动会带动整页左右移动 */
+  contain: paint;
 }
 
 .users-table {
-  flex: none;
+  /* 窄屏下不压缩列宽，由容器横向滚动（同 AntD、MUI 表格的处理） */
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   font-size: 14px;
   line-height: 22px;
+}
+
+/* 操作列固定在右侧，横向滚动时始终可见 */
+.users-table th:last-child,
+.users-table td:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
+}
+
+/* 表头与右对齐的操作按钮对齐 */
+.users-table th:last-child {
+  text-align: right;
+}
+
+.users-table tbody tr:hover td:last-child {
+  background: var(--hover);
 }
 
 .users-table th {
@@ -59,6 +86,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .users-state::before {
@@ -69,10 +97,6 @@
   background: var(--success);
 }
 
-.users-state.invited::before {
-  background: var(--accent);
-}
-
 .users-state.disabled {
   color: var(--muted);
 }
@@ -81,14 +105,16 @@
   background: var(--faint);
 }
 
+/* 与其它单元格同字号，只用弱化颜色区分次要信息 */
 .users-when {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 18px;
+  white-space: nowrap;
 }
 
 .users-actions {
+  /* 三个图标按钮的宽度下限，窄屏下不压缩，由容器横向滚动 */
   width: 1%;
+  min-width: 124px;
   white-space: nowrap;
 }
 
@@ -100,14 +126,6 @@
 
 .users-actions li {
   display: flex;
-}
-
-.users-sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
 }
 
 .users-text {

@@ -1,9 +1,5 @@
-import { RiMenuLine, RiSearchLine } from '@remixicon/react';
-
-import { useI18n } from '../../i18n';
 import { AccountMenu } from '../account-menu';
-import { Button } from '../button';
-import { MenuButton } from '../menu-button';
+import { PanelHead } from '../panel-head';
 
 export interface ListHeadProps {
   collapsed: boolean;
@@ -19,7 +15,7 @@ export interface ListHeadProps {
 }
 
 /**
- * 列表面板头部包含移动端菜单、侧栏折叠、常驻搜索与账户入口。
+ * 列表面板头部：面板头部加移动端的账户入口。
  */
 export function ListHead({
   collapsed,
@@ -33,44 +29,23 @@ export function ListHead({
   onCreateTemplate,
   onLogout,
 }: ListHeadProps) {
-  const { t } = useI18n();
-  const toggleLabel = collapsed
-    ? t('mail.expandSidebar')
-    : t('mail.collapseSidebar');
-
   return (
-    <>
-      <div className="list-head">
-        <MenuButton onClick={onMenu} />
-        <Button
-          variant="icon"
-          className="sidebar-toggle"
-          onClick={onToggleSidebar}
-          aria-label={toggleLabel}
-          title={toggleLabel}
-        >
-          <RiMenuLine size={20} aria-hidden />
-        </Button>
-        <search className="search">
-          <RiSearchLine size={20} aria-hidden />
-          <input
-            type="search"
-            value={search}
-            onChange={event => onSearch(event.target.value)}
-            placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
-          />
-        </search>
-        <div className="account-mobile">
-          <AccountMenu
-            id={accountMenuId}
-            user={user}
-            onCreateTemplate={onCreateTemplate}
-            onLogout={onLogout}
-          />
-        </div>
+    <PanelHead
+      collapsed={collapsed}
+      onToggleSidebar={onToggleSidebar}
+      onMenu={onMenu}
+      search={search}
+      onSearch={onSearch}
+      searchPlaceholder={searchPlaceholder}
+    >
+      <div className="account-mobile">
+        <AccountMenu
+          id={accountMenuId}
+          user={user}
+          onCreateTemplate={onCreateTemplate}
+          onLogout={onLogout}
+        />
       </div>
-      <hr />
-    </>
+    </PanelHead>
   );
 }

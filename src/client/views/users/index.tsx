@@ -6,7 +6,6 @@ import {
   RiForbidLine,
   RiGroupLine,
   RiKey2Line,
-  RiSearchLine,
 } from '@remixicon/react';
 import { type ReactNode, useId, useState } from 'react';
 
@@ -16,6 +15,7 @@ import { Button } from '../../components/button';
 import { EmptyState } from '../../components/empty-state';
 import { FormItem } from '../../components/form-item';
 import { Modal } from '../../components/modal';
+import { PanelHead } from '../../components/panel-head';
 import { useToast } from '../../components/toast';
 import { dateTimeInputValue, dateTimeValue, formatDate } from '../../format';
 import type { ConfirmRequest } from '../../hooks/use-confirm';
@@ -35,12 +35,20 @@ const STATUS_KEYS: Record<UserSummary['status'], MessageKey> = {
 
 export interface UsersProps {
   askConfirm: (request: ConfirmRequest) => void;
+  collapsed: boolean;
+  onToggleSidebar: () => void;
+  onMenu: () => void;
 }
 
 /**
  * 用户管理：仅所有者可见，负责邀请、启用停用、删除与重置链接。
  */
-export function Users({ askConfirm }: UsersProps) {
+export function Users({
+  askConfirm,
+  collapsed,
+  onToggleSidebar,
+  onMenu,
+}: UsersProps) {
   const { locale, t } = useI18n();
   const { users, busy, invite, setStatus, remove, issueLink } = useUsers();
   const [query, setQuery] = useState('');
@@ -142,17 +150,14 @@ export function Users({ askConfirm }: UsersProps) {
 
   return (
     <section className="panel users-pane" aria-label={t('users.title')}>
-      <div className="panel-head">
-        <search className="search">
-          <RiSearchLine size={20} aria-hidden />
-          <input
-            type="search"
-            value={query}
-            placeholder={t('users.searchPlaceholder')}
-            aria-label={t('users.search')}
-            onChange={event => setQuery(event.target.value)}
-          />
-        </search>
+      <PanelHead
+        collapsed={collapsed}
+        onToggleSidebar={onToggleSidebar}
+        onMenu={onMenu}
+        search={query}
+        onSearch={setQuery}
+        searchPlaceholder={t('users.searchPlaceholder')}
+      >
         <Button
           variant="primary"
           className="users-create"
@@ -161,51 +166,50 @@ export function Users({ askConfirm }: UsersProps) {
           <RiAddLine size={20} aria-hidden />
           {t('users.inviteUser')}
         </Button>
-      </div>
-      <hr />
+      </PanelHead>
       <div className="panel-body">
         {visible.length === 0 ? (
           <EmptyState icon={<RiGroupLine aria-hidden />}>
             {needle ? t('users.noMatch') : t('users.empty')}
           </EmptyState>
         ) : (
-          <table className="users-table">
-            <thead>
-              <tr>
-                <th>{t('users.email')}</th>
-                <th>{t('users.nickname')}</th>
-                <th>{t('users.status')}</th>
-                <th>{t('users.createdAt')}</th>
-                <th>
-                  <span className="users-sr">{t('users.actions')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map(user => (
-                <tr
-                  key={user.id}
-                  className={user.status === 'disabled' ? 'off' : undefined}
-                >
-                  <td className="users-email">{user.email}</td>
-                  <td>{user.name}</td>
-                  <td>
-                    <span className={`users-state ${user.status}`}>
-                      {t(STATUS_KEYS[user.status])}
-                    </span>
-                  </td>
-                  <td className="users-when">
-                    <time dateTime={dateTimeValue(user.created_at)}>
-                      {formatDate(user.created_at, locale)}
-                    </time>
-                  </td>
-                  <td className="users-actions">
-                    <ActionMenu disabled={busy} items={rowActions(user)} />
-                  </td>
+          <div className="users-scroll">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>{t('users.email')}</th>
+                  <th>{t('users.nickname')}</th>
+                  <th>{t('users.status')}</th>
+                  <th>{t('users.createdAt')}</th>
+                  <th>{t('users.actions')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visible.map(user => (
+                  <tr
+                    key={user.id}
+                    className={user.status === 'disabled' ? 'off' : undefined}
+                  >
+                    <td className="users-email">{user.email}</td>
+                    <td>{user.name}</td>
+                    <td>
+                      <span className={`users-state ${user.status}`}>
+                        {t(STATUS_KEYS[user.status])}
+                      </span>
+                    </td>
+                    <td className="users-when">
+                      <time dateTime={dateTimeValue(user.created_at)}>
+                        {formatDate(user.created_at, locale)}
+                      </time>
+                    </td>
+                    <td className="users-actions">
+                      <ActionMenu disabled={busy} items={rowActions(user)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

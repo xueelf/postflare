@@ -249,6 +249,11 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
         messages.discardDraft(messageId);
       }
     },
+    onDownload: () => {
+      if (messageId) {
+        messages.downloadMessage(messageId);
+      }
+    },
     onMove: mailbox => {
       if (messageId) {
         messages.moveMessage(messageId, mailbox);
@@ -296,7 +301,12 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
         path="/users"
         element={
           user.role === 'owner' ? (
-            <Users askConfirm={confirm.askConfirm} />
+            <Users
+              askConfirm={confirm.askConfirm}
+              collapsed={shell.sidebarCollapsed}
+              onToggleSidebar={shell.toggleSidebar}
+              onMenu={openMenu}
+            />
           ) : (
             <Navigate to="/inbox" replace />
           )
