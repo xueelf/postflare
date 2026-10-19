@@ -23,13 +23,15 @@ export interface ComposeDeps {
   closeDrawer: () => void;
   openMessage: MessageDetail | null;
   refreshList: () => void;
+  refreshCounts: () => void;
 }
 
 /**
  * 写信弹窗：内容状态、草稿自动保存、发送与正文图片上传。
  */
 export function useCompose(route: MailRoute, deps: ComposeDeps) {
-  const { navigate, closeDrawer, openMessage, refreshList } = deps;
+  const { navigate, closeDrawer, openMessage, refreshList, refreshCounts } =
+    deps;
   const { locale, t } = useI18n();
 
   const [composeTo, setComposeTo] = useState('');
@@ -172,6 +174,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         setSavedAt(formatTime(new Date(), locale));
         setDraftBusy(false);
         refreshList();
+        refreshCounts();
 
         return data.id;
       })
@@ -289,6 +292,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         resetCompose();
         setComposeBusy(false);
         refreshList();
+        refreshCounts();
         navigate(`/sent/${data.id}`);
       })
       .catch(() => {

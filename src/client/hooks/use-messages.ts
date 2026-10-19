@@ -260,7 +260,7 @@ export function useMessages(
             }
             toast.success(t('mail.draftDiscarded'));
             refreshList();
-
+            refreshCounts();
             navigate(viewPath('drafts', next, route.q), { replace: true });
           })
           .catch(() => {
@@ -289,7 +289,7 @@ export function useMessages(
         }
         toast.success(t(MOVE_TOASTS[mailbox]));
         refreshList();
-
+        refreshCounts();
         navigate(viewPath(route.view, next, route.q), { replace: true });
       })
       .catch(() => {
@@ -342,7 +342,7 @@ export function useMessages(
             }
             toast.success(t('mail.purged'));
             refreshList();
-
+            refreshCounts();
             navigate(viewPath(route.view, next, route.q), { replace: true });
           })
           .catch(() => {
@@ -372,6 +372,7 @@ export function useMessages(
               t(mailbox === 'spam' ? 'mail.spamEmptied' : 'mail.trashEmptied'),
             );
             refreshList();
+            refreshCounts();
 
             if (route.messageId) {
               navigate(viewPath(route.view, null, route.q), {
@@ -394,6 +395,7 @@ export function useMessages(
     loadingMore,
     loadMore,
     counts,
+    refreshCounts,
     openMessage,
     refreshList,
     discardDraft,
