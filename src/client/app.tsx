@@ -84,6 +84,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     closeDrawer: shell.closeDrawer,
     openMessage: messages.openMessage,
     refreshList: messages.refreshList,
+    refreshCounts: messages.refreshCounts,
   });
   const templates = useTemplates(route, ready, {
     navigate,
