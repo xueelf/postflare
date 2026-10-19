@@ -118,6 +118,7 @@ export const fr: Record<MessageKey, string> = {
   'mail.discardMessage': 'Cette action est irréversible.',
   'mail.discardTitle': 'Abandonner ce brouillon ?',
   'mail.draftDiscarded': 'Brouillon abandonné',
+  'mail.download': 'Télécharger le message',
   'mail.editDraft': 'Modifier le brouillon',
   'mail.emptyMailbox': 'Vider',
   'mail.emptyMailboxMessage':

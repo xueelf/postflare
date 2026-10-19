@@ -117,6 +117,7 @@ export const it: Record<MessageKey, string> = {
   'mail.discardMessage': "L'operazione non può essere annullata.",
   'mail.discardTitle': 'Scartare questa bozza?',
   'mail.draftDiscarded': 'Bozza scartata',
+  'mail.download': 'Scarica messaggio',
   'mail.editDraft': 'Modifica bozza',
   'mail.emptyMailbox': 'Svuota',
   'mail.emptyMailboxMessage':

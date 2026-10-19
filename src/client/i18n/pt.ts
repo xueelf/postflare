@@ -115,6 +115,7 @@ export const pt: Record<MessageKey, string> = {
   'mail.discardMessage': 'Isso não pode ser desfeito.',
   'mail.discardTitle': 'Descartar este rascunho?',
   'mail.draftDiscarded': 'Rascunho descartado',
+  'mail.download': 'Baixar mensagem',
   'mail.editDraft': 'Editar rascunho',
   'mail.emptyMailbox': 'Esvaziar',
   'mail.emptyMailboxMessage':

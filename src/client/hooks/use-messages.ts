@@ -239,6 +239,33 @@ export function useMessages(
       });
   };
 
+  const downloadMessage = (id: string) => {
+    apiFetch(`/api/messages/${id}/eml`)
+      .then(async res => {
+        if (!res.ok) {
+          toast.error(t('mail.actionFailedRetry'));
+
+          return;
+        }
+        // 文件名以服务端下发的为准，客户端不再拼一遍
+        const name =
+          /filename\*=UTF-8''([^;]+)/.exec(
+            res.headers.get('Content-Disposition') ?? '',
+          )?.[1] ?? 'message.eml';
+        const url = URL.createObjectURL(await res.blob());
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.download = decodeURIComponent(name);
+        link.click();
+        // 等浏览器开始读取后再释放
+        setTimeout(() => URL.revokeObjectURL(url));
+      })
+      .catch(() => {
+        toast.error(t('mail.actionFailedRetry'));
+      });
+  };
+
   const purgeMessage = (id: string) => {
     askConfirm({
       title: t('mail.purgeTitle'),
@@ -308,6 +335,7 @@ export function useMessages(
     openMessage,
     refreshList,
     discardDraft,
+    downloadMessage,
     moveMessage,
     purgeMessage,
     emptyMailbox,

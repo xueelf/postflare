@@ -113,6 +113,7 @@ export const en: Record<MessageKey, string> = {
   'mail.discardMessage': "This can't be undone.",
   'mail.discardTitle': 'Discard this draft?',
   'mail.draftDiscarded': 'Draft discarded',
+  'mail.download': 'Download message',
   'mail.editDraft': 'Edit draft',
   'mail.emptyMailbox': 'Empty',
   'mail.emptyMailboxMessage': 'All messages in it will be permanently deleted.',

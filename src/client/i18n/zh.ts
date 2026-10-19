@@ -108,6 +108,7 @@ export const zh = {
   'mail.discardMessage': '丢弃后无法恢复。',
   'mail.discardTitle': '丢弃这份草稿？',
   'mail.draftDiscarded': '草稿已丢弃',
+  'mail.download': '下载邮件',
   'mail.editDraft': '编辑草稿',
   'mail.emptyMailbox': '清空',
   'mail.emptyMailboxMessage': '其中的邮件将被永久删除。',

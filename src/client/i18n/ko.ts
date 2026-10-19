@@ -114,6 +114,7 @@ export const ko: Record<MessageKey, string> = {
   'mail.discardMessage': '버리면 되돌릴 수 없습니다.',
   'mail.discardTitle': '임시 저장한 메일을 버릴까요?',
   'mail.draftDiscarded': '임시 저장을 버렸습니다',
+  'mail.download': '메일 다운로드',
   'mail.editDraft': '임시 저장 편집',
   'mail.emptyMailbox': '비우기',
   'mail.emptyMailboxMessage': '안의 메일이 영구적으로 삭제됩니다.',

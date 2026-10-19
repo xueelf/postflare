@@ -102,6 +102,151 @@ export async function getMessage(
   return Response.json({ ...message, attachments });
 }
 
+interface DownloadRow {
+  from_address: string;
+  from_name: string;
+  to_address: string;
+  subject: string;
+  body_text: string | null;
+  body_html: string | null;
+  message_id: string | null;
+  created_at: string;
+  raw_storage_key: string | null;
+}
+
+const FILENAME_STRIP = /[\\/:*?"<>|]/g;
+const CONTROL_CHARS = /\p{Cc}/gu;
+
+/** 文件名用主题，去掉文件名不允许的字符，为空或过长时退回 id */
+function emlFilename(subject: string, id: string): string {
+  const cleaned = subject
+    .replace(CONTROL_CHARS, ' ')
+    .replace(FILENAME_STRIP, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\.+/, '')
+    .slice(0, 80)
+    .trim();
+
+  return `${cleaned || id}.eml`;
+}
+
+/** 非 ASCII 的头按 RFC 2047 编码，纯 ASCII 原样返回 */
+function encodeHeader(value: string): string {
+  if (/^[\x20-\x7e]*$/.test(value)) {
+    return value;
+  }
+
+  const bytes = new TextEncoder().encode(value);
+
+  let binary = '';
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return `=?UTF-8?B?${btoa(binary)}?=`;
+}
+
+/** UTF-8 文本转 base64，按 MIME 要求每 76 字符折行 */
+function encodeBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+
+  let binary = '';
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary).replace(/.{76}(?=.)/g, '$&\r\n');
+}
+
+/**
+ * 发件没有存原文，用库里的头与正文拼一封 eml，内容与发出的一致。
+ */
+function buildEml(message: DownloadRow): string {
+  const boundary = `postflare-${crypto.randomUUID()}`;
+  const from = message.from_name
+    ? `${encodeHeader(message.from_name)} <${message.from_address}>`
+    : message.from_address;
+  const domain = message.from_address.split('@')[1] ?? 'localhost';
+  const date = new Date(`${message.created_at.replace(' ', 'T')}Z`);
+  const lines = [
+    `From: ${from}`,
+    `To: ${message.to_address}`,
+    `Subject: ${encodeHeader(message.subject)}`,
+    `Date: ${date.toUTCString()}`,
+    `Message-ID: <${message.message_id ?? `${crypto.randomUUID()}@${domain}`}>`,
+    'MIME-Version: 1.0',
+  ];
+
+  if (message.body_html) {
+    lines.push(
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      encodeBase64(message.body_text ?? ''),
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      encodeBase64(message.body_html),
+      `--${boundary}--`,
+    );
+  } else {
+    lines.push(
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      encodeBase64(message.body_text ?? ''),
+    );
+  }
+
+  return lines.join('\r\n');
+}
+
+/**
+ * 下载邮件：收到时存了原文就给原文，发件用拼出来的那封。
+ */
+export async function downloadMessage(
+  env: Env,
+  id: string,
+  userId: string,
+): Promise<Response> {
+  const message = await env.DB.prepare(
+    `SELECT from_address, from_name, to_address, subject,
+            body_text, body_html, message_id, created_at, raw_storage_key
+     FROM messages
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(id, userId)
+    .first<DownloadRow>();
+
+  if (!message) {
+    return notFound();
+  }
+
+  const filename = emlFilename(message.subject, id);
+  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  const raw = message.raw_storage_key
+    ? await env.ATTACHMENTS.get(message.raw_storage_key)
+    : null;
+
+  // 同 inbound，workers-types 与 DOM 库声明的 ReadableStream 类型不同，运行时一致
+  return new Response(
+    raw ? (raw.body as unknown as BodyInit) : buildEml(message),
+    {
+      headers: {
+        'Content-Type': 'message/rfc822',
+        'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      },
+    },
+  );
+}
+
 export async function markMessageRead(
   env: Env,
   id: string,

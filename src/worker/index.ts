@@ -9,6 +9,7 @@ import { composeMessage, discardDraft, saveDraft } from './compose';
 import { jsonError, methodNotAllowed, notFound } from './http';
 import { handleInbound } from './inbound';
 import {
+  downloadMessage,
   emptyMailbox,
   getFolderCounts,
   getMessage,
@@ -122,6 +123,12 @@ const ROUTES: Route[] = [
     pattern: '/api/messages/:id/read',
     handler: ({ env, params, user }) =>
       markMessageRead(env, param(params, 'id'), user.id),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/messages/:id/eml',
+    handler: ({ env, params, user }) =>
+      downloadMessage(env, param(params, 'id'), user.id),
   },
   {
     method: 'POST',

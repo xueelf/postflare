@@ -122,6 +122,7 @@ export const de: Record<MessageKey, string> = {
   'mail.discardMessage': 'Das kann nicht rückgängig gemacht werden.',
   'mail.discardTitle': 'Diesen Entwurf verwerfen?',
   'mail.draftDiscarded': 'Entwurf verworfen',
+  'mail.download': 'Nachricht herunterladen',
   'mail.editDraft': 'Entwurf bearbeiten',
   'mail.emptyMailbox': 'Leeren',
   'mail.emptyMailboxMessage':
