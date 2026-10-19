@@ -3,6 +3,7 @@ import {
   RiAttachmentLine,
   RiDeleteBin2Line,
   RiDeleteBinLine,
+  RiDownloadLine,
   RiEditLine,
   RiInboxLine,
   RiInboxUnarchiveLine,
@@ -12,10 +13,11 @@ import {
 import { type ReactNode } from 'react';
 
 import { ActionMenu } from '../../components/action-menu';
+import { BodyFrame } from '../../components/body-frame';
 import { Button } from '../../components/button';
 import { EmptyState } from '../../components/empty-state';
 import { MessageView } from '../../components/message-view';
-import { dateTimeValue, emailHtml, formatDate, formatSize } from '../../format';
+import { dateTimeValue, formatDate, formatSize } from '../../format';
 import type { MessageDetail } from '../../hooks/use-messages';
 import { useI18n } from '../../i18n';
 import type { View } from '../../route';
@@ -28,6 +30,7 @@ export interface ReaderProps {
   onBack: () => void;
   onCompose: () => void;
   onDiscard: () => void;
+  onDownload: () => void;
   onMove: (mailbox: 'inbox' | 'sent' | 'spam' | 'trash') => void;
   onPurge: () => void;
 }
@@ -43,6 +46,7 @@ export function Reader({
   onBack,
   onCompose,
   onDiscard,
+  onDownload,
   onMove,
   onPurge,
 }: ReaderProps) {
@@ -72,6 +76,15 @@ export function Reader({
       run: onCompose,
     },
   ];
+
+  // 草稿是本地副本，没有可下载的原文
+  if (view !== 'drafts') {
+    actions.push({
+      icon: <RiDownloadLine size={20} aria-hidden />,
+      label: t('mail.download'),
+      run: onDownload,
+    });
+  }
 
   if (view === 'inbox') {
     actions.push(
@@ -141,66 +154,57 @@ export function Reader({
         <ActionMenu className="reader-actions" items={actions} />
       </div>
       <hr />
-      <div className="conversation">
-        <MessageView
-          avatarName={messageWho}
-          correspondent={messageWho}
-          addr={
-            message.direction === 'outbound'
-              ? accountEmail
-              : message.from_name
-                ? message.from_address
-                : undefined
-          }
-          when={formatDate(message.created_at, locale)}
-          dateTime={dateTimeValue(message.created_at)}
-          detailsId="message-details"
-        >
-          <dl id="message-details" popover="auto" className="message-details">
-            <dt>{t('mail.from')}</dt>
-            <dd>{message.from_address}</dd>
-            <dt>{t('mail.to')}</dt>
-            <dd>{message.to_address}</dd>
-            <dt>{t('mail.subject')}</dt>
-            <dd>{message.subject || t('mail.noSubject')}</dd>
-            <dt>{t('mail.date')}</dt>
-            <dd>{formatDate(message.created_at, locale)}</dd>
-          </dl>
-          {message.attachments.length > 0 && (
-            <ul className="attachments">
-              {message.attachments.map(file => (
-                <li key={file.id}>
-                  <a href={`/api/attachments/${file.id}`}>
-                    <RiAttachmentLine size={14} aria-hidden />
-                    {file.filename}
-                  </a>
-                  <span className="meta">{formatSize(file.size_bytes)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {message.body_html ? (
-            <iframe
-              className="body-html"
-              sandbox="allow-same-origin"
-              srcDoc={emailHtml(message.body_html)}
-              title={t('mail.body')}
-            />
-          ) : (
-            <>
-              <pre className="body-text">
-                {quote.visible || t('mail.noBody')}
-              </pre>
-              {quote.quoted && (
-                <details className="quote">
-                  <summary>{t('mail.showQuoted')}</summary>
-                  <pre className="body-text quoted">{quote.quoted}</pre>
-                </details>
-              )}
-            </>
-          )}
-        </MessageView>
-      </div>
+      <MessageView
+        avatarName={messageWho}
+        correspondent={messageWho}
+        addr={
+          message.direction === 'outbound'
+            ? accountEmail
+            : message.from_name
+              ? message.from_address
+              : undefined
+        }
+        when={formatDate(message.created_at, locale)}
+        dateTime={dateTimeValue(message.created_at)}
+        detailsId="message-details"
+      >
+        <dl id="message-details" popover="auto" className="message-details">
+          <dt>{t('mail.from')}</dt>
+          <dd>{message.from_address}</dd>
+          <dt>{t('mail.to')}</dt>
+          <dd>{message.to_address}</dd>
+          <dt>{t('mail.subject')}</dt>
+          <dd>{message.subject || t('mail.noSubject')}</dd>
+          <dt>{t('mail.date')}</dt>
+          <dd>{formatDate(message.created_at, locale)}</dd>
+        </dl>
+        {message.attachments.length > 0 && (
+          <ul className="attachments">
+            {message.attachments.map(file => (
+              <li key={file.id}>
+                <a href={`/api/attachments/${file.id}`}>
+                  <RiAttachmentLine size={14} aria-hidden />
+                  {file.filename}
+                </a>
+                <span className="meta">{formatSize(file.size_bytes)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {message.body_html ? (
+          <BodyFrame html={message.body_html} title={t('mail.body')} />
+        ) : (
+          <>
+            <pre className="body-text">{quote.visible || t('mail.noBody')}</pre>
+            {quote.quoted && (
+              <details className="quote">
+                <summary>{t('mail.showQuoted')}</summary>
+                <pre className="body-text quoted">{quote.quoted}</pre>
+              </details>
+            )}
+          </>
+        )}
+      </MessageView>
     </section>
   );
 }

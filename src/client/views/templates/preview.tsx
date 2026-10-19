@@ -6,13 +6,13 @@ import {
 } from '@remixicon/react';
 
 import { ActionMenu } from '../../components/action-menu';
+import { BodyFrame } from '../../components/body-frame';
 import { Button } from '../../components/button';
 import { EmptyState } from '../../components/empty-state';
 import { MessageView } from '../../components/message-view';
 import {
   dateTimeValue,
   displayName,
-  emailHtml,
   formatDate,
   templateHtml,
 } from '../../format';
@@ -71,22 +71,18 @@ export function TemplatePreview({
             />
           </div>
           <hr />
-          <div className="conversation">
-            <MessageView
-              avatarName={accountName}
-              correspondent={accountName}
-              addr={user.email}
-              when={formatDate(template.updated_at, locale)}
-              dateTime={dateTimeValue(template.updated_at)}
-            >
-              <iframe
-                className="body-html"
-                sandbox="allow-same-origin"
-                srcDoc={emailHtml(templateHtml(template.body_html))}
-                title={t('templates.body')}
-              />
-            </MessageView>
-          </div>
+          <MessageView
+            avatarName={accountName}
+            correspondent={accountName}
+            addr={user.email}
+            when={formatDate(template.updated_at, locale)}
+            dateTime={dateTimeValue(template.updated_at)}
+          >
+            <BodyFrame
+              html={templateHtml(template.body_html)}
+              title={t('templates.body')}
+            />
+          </MessageView>
         </>
       ) : (
         <EmptyState icon={<RiFileTextLine aria-hidden />}>
