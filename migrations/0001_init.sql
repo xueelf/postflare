@@ -1,12 +1,12 @@
--- Postflare 初始 schema：多用户邮箱，每个用户一个独立邮箱
+-- 表结构：多用户邮箱，每个用户一个独立邮箱
 
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE COLLATE NOCASE,
   name TEXT NOT NULL,
-  password_hash TEXT,
+  password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('owner', 'user')),
-  status TEXT NOT NULL DEFAULT 'invited' CHECK (status IN ('invited', 'active', 'disabled')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
   language TEXT NOT NULL DEFAULT 'en',
   -- 登录失败计数与最近一次失败时间，用于限流（同 Roundcube 的 failed_login）
   failed_login_at TEXT,
@@ -28,12 +28,15 @@ CREATE TABLE sessions (
 CREATE INDEX idx_sessions_user ON sessions (user_id);
 CREATE INDEX idx_sessions_expires ON sessions (expires_at);
 
--- 一次性注册/重置链接：用过即删，不另设状态列
+-- 一次性链接：user_id 为空表示邀请，被邀请者自己选用户名与昵称，非空表示重置密码
+-- max_uses 与 used_count 限定邀请链接可供几人注册，重置链接固定一人一次
 CREATE TABLE user_tokens (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
-  purpose TEXT NOT NULL CHECK (purpose IN ('invite', 'reset')),
+  max_uses INTEGER NOT NULL DEFAULT 1,
+  used_count INTEGER NOT NULL DEFAULT 0,
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

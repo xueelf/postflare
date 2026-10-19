@@ -296,10 +296,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
         path="/users"
         element={
           user.role === 'owner' ? (
-            <Users
-              mailDomain={auth.auth.mailDomain}
-              askConfirm={confirm.askConfirm}
-            />
+            <Users askConfirm={confirm.askConfirm} />
           ) : (
             <Navigate to="/inbox" replace />
           )

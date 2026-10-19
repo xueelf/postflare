@@ -6,18 +6,18 @@ import {
   RiForbidLine,
   RiGroupLine,
   RiKey2Line,
-  RiLink,
   RiSearchLine,
 } from '@remixicon/react';
 import { type ReactNode, useId, useState } from 'react';
 
+import { INVITE_MAX_TTL_SECONDS, INVITE_MAX_USES } from '../../../invites';
 import { ActionMenu } from '../../components/action-menu';
 import { Button } from '../../components/button';
 import { EmptyState } from '../../components/empty-state';
 import { FormItem } from '../../components/form-item';
 import { Modal } from '../../components/modal';
 import { useToast } from '../../components/toast';
-import { dateTimeValue, formatDate } from '../../format';
+import { dateTimeInputValue, dateTimeValue, formatDate } from '../../format';
 import type { ConfirmRequest } from '../../hooks/use-confirm';
 import {
   type IssuedLink,
@@ -29,24 +29,22 @@ import { type MessageKey, useI18n } from '../../i18n';
 import './style.css';
 
 const STATUS_KEYS: Record<UserSummary['status'], MessageKey> = {
-  invited: 'users.statusInvited',
   active: 'users.statusActive',
   disabled: 'users.statusDisabled',
 };
 
 export interface UsersProps {
-  mailDomain: string;
   askConfirm: (request: ConfirmRequest) => void;
 }
 
 /**
- * 用户管理：仅所有者可见，列表、新建、启用停用、删除与一次性链接。
+ * 用户管理：仅所有者可见，负责邀请、启用停用、删除与重置链接。
  */
-export function Users({ mailDomain, askConfirm }: UsersProps) {
+export function Users({ askConfirm }: UsersProps) {
   const { locale, t } = useI18n();
-  const { users, busy, create, setStatus, remove, issueLink } = useUsers();
+  const { users, busy, invite, setStatus, remove, issueLink } = useUsers();
   const [query, setQuery] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [link, setLink] = useState<IssuedLink | null>(null);
 
   const needle = query.trim().toLowerCase();
@@ -61,6 +59,16 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
   const openLink = (id: string) => {
     issueLink(id).then(issued => {
       if (issued) {
+        setLink(issued);
+      }
+    });
+  };
+
+  // 生成成功后关掉表单弹窗，链接交给结果弹窗展示
+  const submitInvite = (options: { expiresAt: string; maxUses: number }) => {
+    invite(options).then(issued => {
+      if (issued) {
+        setInviteOpen(false);
         setLink(issued);
       }
     });
@@ -101,35 +109,27 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
       return actions;
     }
 
-    if (user.status === 'invited') {
-      actions.push({
-        label: t('users.inviteLink'),
-        icon: <RiLink size={20} aria-hidden />,
-        run: () => openLink(user.id),
-      });
-    } else {
-      actions.push(
-        user.status === 'active'
-          ? {
-              label: t('users.disable'),
-              icon: <RiForbidLine size={20} aria-hidden />,
-              run: () => askDisable(user),
-            }
-          : {
-              label: t('users.enable'),
-              icon: <RiCheckLine size={20} aria-hidden />,
-              run: () => {
-                setStatus(user.id, 'active');
-              },
+    actions.push(
+      user.status === 'active'
+        ? {
+            label: t('users.disable'),
+            icon: <RiForbidLine size={20} aria-hidden />,
+            run: () => askDisable(user),
+          }
+        : {
+            label: t('users.enable'),
+            icon: <RiCheckLine size={20} aria-hidden />,
+            run: () => {
+              setStatus(user.id, 'active');
             },
-      );
+          },
+    );
 
-      actions.push({
-        label: t('users.resetPassword'),
-        icon: <RiKey2Line size={20} aria-hidden />,
-        run: () => openLink(user.id),
-      });
-    }
+    actions.push({
+      label: t('users.resetPassword'),
+      icon: <RiKey2Line size={20} aria-hidden />,
+      run: () => openLink(user.id),
+    });
 
     actions.push({
       label: t('users.deleteUser'),
@@ -156,10 +156,10 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
         <Button
           variant="primary"
           className="users-create"
-          onClick={() => setCreating(true)}
+          onClick={() => setInviteOpen(true)}
         >
           <RiAddLine size={20} aria-hidden />
-          {t('users.newUser')}
+          {t('users.inviteUser')}
         </Button>
       </div>
       <hr />
@@ -209,61 +209,59 @@ export function Users({ mailDomain, askConfirm }: UsersProps) {
         )}
       </div>
 
-      {creating && (
-        <CreateDialog
+      {inviteOpen && (
+        <InviteDialog
           busy={busy}
-          mailDomain={mailDomain}
-          onCreate={create}
-          onCreated={issued => {
-            setCreating(false);
-            setLink(issued);
-          }}
-          onClose={() => setCreating(false)}
+          onSubmit={submitInvite}
+          onDismiss={() => setInviteOpen(false)}
         />
       )}
+
       {link && <LinkDialog issued={link} onClose={() => setLink(null)} />}
     </section>
   );
 }
 
 /**
- * 新建用户：只填用户名与昵称，密码由对方通过一次性链接自行设置。
+ * 邀请表单：选有效期与注册人数，提交后生成链接。
  */
-function CreateDialog({
+function InviteDialog({
   busy,
-  mailDomain,
-  onCreate,
-  onCreated,
-  onClose,
+  onSubmit,
+  onDismiss,
 }: {
   busy: boolean;
-  mailDomain: string;
-  onCreate: (username: string, name: string) => Promise<IssuedLink | null>;
-  onCreated: (issued: IssuedLink) => void;
-  onClose: () => void;
+  onSubmit: (options: { expiresAt: string; maxUses: number }) => void;
+  onDismiss: () => void;
 }) {
   const { t } = useI18n();
-  const [username, setUsername] = useState('');
-  const [name, setName] = useState('');
   const formId = useId();
-  const clean = username.trim();
+  // 可选范围在打开时定下：最早此刻，最晚 24 小时后
+  const [{ min, max }] = useState(() => {
+    const now = new Date();
+    const limit = new Date(now.getTime() + INVITE_MAX_TTL_SECONDS * 1000);
+
+    return { min: dateTimeInputValue(now), max: dateTimeInputValue(limit) };
+  });
+  const [expiresAt, setExpiresAt] = useState(max);
+  const [maxUses, setMaxUses] = useState('1');
 
   return (
     <Modal
-      title={t('users.newUser')}
-      onDismiss={onClose}
+      title={t('users.inviteUser')}
+      onDismiss={onDismiss}
       footer={
         <>
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={onDismiss}>
             {t('users.cancel')}
           </button>
           <Button
             type="submit"
             form={formId}
             variant="primary"
-            disabled={busy || !clean || !name.trim()}
+            disabled={busy || !expiresAt || !maxUses}
           >
-            {busy ? t('users.creating') : t('users.create')}
+            {t('users.generateLink')}
           </Button>
         </>
       }
@@ -273,38 +271,30 @@ function CreateDialog({
         onSubmit={event => {
           event.preventDefault();
 
-          onCreate(clean, name.trim()).then(issued => {
-            if (issued) {
-              onCreated(issued);
-            }
+          onSubmit({
+            expiresAt: new Date(expiresAt).toISOString(),
+            maxUses: Number(maxUses),
           });
         }}
       >
-        <FormItem
-          label={
-            <>
-              <span>{t('users.username')}</span>
-              {clean && (
-                <span className="form-ref">
-                  {clean}@{mailDomain}
-                </span>
-              )}
-            </>
-          }
-        >
+        <FormItem label={t('users.maxUses')}>
           <input
-            value={username}
+            type="number"
+            value={maxUses}
+            min={1}
+            max={INVITE_MAX_USES}
             required
-            autoComplete="off"
-            onChange={event => setUsername(event.target.value)}
+            onChange={event => setMaxUses(event.target.value)}
           />
         </FormItem>
-        <FormItem label={t('users.nickname')}>
+        <FormItem label={t('users.expiresAt')}>
           <input
-            value={name}
+            type="datetime-local"
+            value={expiresAt}
+            min={min}
+            max={max}
             required
-            autoComplete="nickname"
-            onChange={event => setName(event.target.value)}
+            onChange={event => setExpiresAt(event.target.value)}
           />
         </FormItem>
       </form>
@@ -322,7 +312,7 @@ function LinkDialog({
   issued: IssuedLink;
   onClose: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const toast = useToast();
   const invite = issued.purpose === 'invite';
 
@@ -362,6 +352,21 @@ function LinkDialog({
           <RiFileCopyLine size={20} aria-hidden />
         </Button>
       </div>
+      {invite && issued.expiresAt && issued.maxUses !== undefined && (
+        <dl className="users-facts">
+          <dt>{t('users.maxUses')}</dt>
+          <dd>{new Intl.NumberFormat(locale).format(issued.maxUses)}</dd>
+          <dt>{t('users.expiresAt')}</dt>
+          <dd>
+            <time dateTime={issued.expiresAt}>
+              {new Date(issued.expiresAt).toLocaleString(locale, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })}
+            </time>
+          </dd>
+        </dl>
+      )}
     </Modal>
   );
 }

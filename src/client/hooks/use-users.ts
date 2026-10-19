@@ -9,13 +9,16 @@ export interface UserSummary {
   email: string;
   name: string;
   role: 'owner' | 'user';
-  status: 'invited' | 'active' | 'disabled';
+  status: 'active' | 'disabled';
   created_at: string;
 }
 
 export interface IssuedLink {
   url: string;
   purpose: 'invite' | 'reset';
+  /** 邀请链接的到期时刻与人数上限，重置链接没有这两项 */
+  expiresAt?: string;
+  maxUses?: number;
 }
 
 // 服务端错误码 → 文案键
@@ -24,10 +27,11 @@ const USER_ERRORS: Record<string, MessageKey> = {
   'invalid username': 'users.errorInvalidUsername',
   'name is empty': 'users.errorNameEmpty',
   'invalid status': 'users.errorInvalidStatus',
-  'user has not activated': 'users.errorNotActivated',
   'cannot modify yourself': 'users.errorCannotModifySelf',
   'cannot delete yourself': 'users.errorCannotDeleteSelf',
   'mail domain is not configured': 'users.errorMailDomain',
+  'invalid invite expiry': 'users.errorInvalidExpiry',
+  'invalid invite uses': 'users.errorInvalidUses',
 };
 
 /**
@@ -56,13 +60,13 @@ export function useUsers() {
     toast.error(key ? t(key) : t('users.actionFailed', { status }));
   };
 
-  const create = (username: string, name: string) => {
+  const invite = (options: { expiresAt: string; maxUses: number }) => {
     setBusy(true);
 
-    return apiFetch('/api/users', {
+    return apiFetch('/api/invites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, name }),
+      body: JSON.stringify(options),
     })
       .then(async res => {
         setBusy(false);
@@ -74,9 +78,13 @@ export function useUsers() {
 
           return null;
         }
-        refresh();
 
-        return { url: data.link, purpose: 'invite' } as IssuedLink;
+        return {
+          url: data.link,
+          purpose: 'invite',
+          expiresAt: options.expiresAt,
+          maxUses: options.maxUses,
+        } as IssuedLink;
       })
       .catch(() => {
         setBusy(false);
@@ -143,7 +151,6 @@ export function useUsers() {
 
         const data = (await res.json().catch(() => ({}))) as {
           link?: string;
-          purpose?: 'invite' | 'reset';
           error?: string;
         };
 
@@ -152,10 +159,7 @@ export function useUsers() {
 
           return null;
         }
-        return {
-          url: data.link,
-          purpose: data.purpose ?? 'reset',
-        } as IssuedLink;
+        return { url: data.link, purpose: 'reset' } as IssuedLink;
       })
       .catch(() => {
         toast.error(t('users.actionFailedRetry'));
@@ -164,5 +168,5 @@ export function useUsers() {
       });
   };
 
-  return { users, busy, create, setStatus, remove, issueLink };
+  return { users, busy, invite, setStatus, remove, issueLink };
 }

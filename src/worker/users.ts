@@ -1,8 +1,11 @@
+import { INVITE_MAX_TTL_SECONDS, INVITE_MAX_USES } from '../invites';
+import { DEFAULT_LOCALE, isLocale } from '../locales';
+
 import {
   type AuthUser,
   createSession,
   hashPassword,
-  randomHex,
+  randomToken,
   sessionCookie,
   sha256Hex,
   validateName,
@@ -25,25 +28,30 @@ const INVITE_PATH = '/api/invite/';
 // 交给用户打开的前端路由，与接口前缀区分
 const INVITE_LINK_PATH = '/invite/';
 const LINK_SUFFIX = '/link';
-const INVITE_TTL_SECONDS = 24 * 60 * 60;
 const RESET_TTL_SECONDS = 60 * 60;
+// 链接令牌 8 位人类可读字符，约 46 位随机数。个人部署并发低，链接又有 24 小时有效期与人数上限，
+// 在线爆破拿不到收益，用更短更好分享的码；低于 OWASP 对长期会话标识 64 位熵的建议是刻意的取舍
+const TOKEN_LENGTH = 8;
+// 客户端与服务端时钟可能有偏差，签发上限校验留出余量
+const INVITE_EXPIRY_GRACE_SECONDS = 5 * 60;
 
 interface UserRow {
   id: string;
   email: string;
   name: string;
   role: 'owner' | 'user';
-  status: 'invited' | 'active' | 'disabled';
+  status: 'active' | 'disabled';
   created_at: string;
 }
 
 interface TokenRow {
-  purpose: 'invite' | 'reset';
+  user_id: string | null;
+  max_uses: number;
+  used_count: number;
   expires_at: string;
-  user_id: string;
-  email: string;
-  name: string;
-  status: 'invited' | 'active' | 'disabled';
+  email: string | null;
+  name: string | null;
+  status: 'active' | 'disabled' | null;
 }
 
 /**
@@ -60,14 +68,7 @@ export async function handleUsers(
   }
 
   if (pathname === '/api/users') {
-    if (request.method === 'GET') {
-      return listUsers(env);
-    }
-
-    if (request.method === 'POST') {
-      return createUser(env, request);
-    }
-    return methodNotAllowed();
+    return request.method === 'GET' ? listUsers(env) : methodNotAllowed();
   }
 
   if (!pathname.startsWith(USERS_PATH)) {
@@ -101,61 +102,62 @@ async function listUsers(env: Env): Promise<Response> {
   return Response.json(results);
 }
 
-async function createUser(env: Env, request: Request): Promise<Response> {
-  const payload = await readJson<{
-    username?: unknown;
-    name?: unknown;
-  }>(request);
+/**
+ * 邀请链接独立于用户，被邀请者自己选用户名与昵称。
+ */
+export async function createInvite(
+  env: Env,
+  request: Request,
+  actor: AuthUser,
+): Promise<Response> {
+  if (actor.role !== 'owner') {
+    return jsonError('forbidden', 403);
+  }
+
+  if (!parseMailDomain(env.MAIL_DOMAIN)) {
+    return badRequest('mail domain is not configured');
+  }
+
+  const payload = await readJson<{ expiresAt?: unknown; maxUses?: unknown }>(
+    request,
+  );
 
   if (payload instanceof Response) {
     return payload;
   }
-  const username =
-    typeof payload.username === 'string' ? payload.username.trim() : '';
-  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
-  const domain = parseMailDomain(env.MAIL_DOMAIN);
 
-  if (!domain) {
-    return badRequest('mail domain is not configured');
-  }
-  const usernameError = validateUsername(username);
+  const expiresAt =
+    typeof payload.expiresAt === 'string' ? Date.parse(payload.expiresAt) : NaN;
+  const maxUses = payload.maxUses;
+  const expiryLimit =
+    Date.now() + (INVITE_MAX_TTL_SECONDS + INVITE_EXPIRY_GRACE_SECONDS) * 1000;
 
-  if (usernameError) {
-    return badRequest(usernameError);
-  }
-  const nameError = validateName(name);
-
-  if (nameError) {
-    return badRequest(nameError);
+  if (
+    !Number.isFinite(expiresAt) ||
+    expiresAt <= Date.now() ||
+    expiresAt > expiryLimit
+  ) {
+    return badRequest('invalid invite expiry');
   }
 
-  const email = `${username}@${domain}`;
-  const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first();
-
-  if (taken) {
-    return Response.json({ error: 'username taken' }, { status: 409 });
+  if (
+    typeof maxUses !== 'number' ||
+    !Number.isInteger(maxUses) ||
+    maxUses < 1 ||
+    maxUses > INVITE_MAX_USES
+  ) {
+    return badRequest('invalid invite uses');
   }
 
-  const id = crypto.randomUUID();
+  const link = await issueToken(
+    env,
+    null,
+    new Date(expiresAt),
+    maxUses,
+    new URL(request.url).origin,
+  );
 
-  try {
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, name, role, status) VALUES (?, ?, ?, 'user', 'invited')`,
-    )
-      .bind(id, email, name)
-      .run();
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      return jsonError('username taken', 409);
-    }
-    throw error;
-  }
-
-  const link = await issueToken(env, id, 'invite', new URL(request.url).origin);
-
-  return Response.json({ id, link }, { status: 201 });
+  return Response.json({ link }, { status: 201 });
 }
 
 async function updateUser(
@@ -187,10 +189,6 @@ async function updateUser(
 
   if (!target) {
     return notFound();
-  }
-
-  if (target.status === 'invited') {
-    return badRequest('user has not activated');
   }
 
   await env.DB.prepare('UPDATE users SET status = ? WHERE id = ?')
@@ -253,41 +251,43 @@ async function issueLink(
     return badRequest('account disabled');
   }
 
-  const purpose = target.status === 'invited' ? 'invite' : 'reset';
   const link = await issueToken(
     env,
     target.id,
-    purpose,
+    new Date(Date.now() + RESET_TTL_SECONDS * 1000),
+    1,
     new URL(request.url).origin,
   );
 
-  return Response.json({ link, purpose });
+  return Response.json({ link });
 }
 
 // 生成一次性链接，作废该用户此前未使用的链接
 async function issueToken(
   env: Env,
-  userId: string,
-  purpose: 'invite' | 'reset',
+  userId: string | null,
+  expiresAt: Date,
+  maxUses: number,
   origin: string,
 ): Promise<string> {
-  await env.DB.prepare('DELETE FROM user_tokens WHERE user_id = ?')
-    .bind(userId)
-    .run();
+  if (userId) {
+    await env.DB.prepare('DELETE FROM user_tokens WHERE user_id = ?')
+      .bind(userId)
+      .run();
+  }
 
-  const token = randomHex(32);
-  const ttl = purpose === 'invite' ? INVITE_TTL_SECONDS : RESET_TTL_SECONDS;
+  const token = randomToken(TOKEN_LENGTH);
 
   await env.DB.prepare(
-    `INSERT INTO user_tokens (id, user_id, token_hash, purpose, expires_at)
+    `INSERT INTO user_tokens (id, user_id, token_hash, max_uses, expires_at)
      VALUES (?, ?, ?, ?, ?)`,
   )
     .bind(
       crypto.randomUUID(),
       userId,
       await sha256Hex(token),
-      purpose,
-      new Date(Date.now() + ttl * 1000).toISOString(),
+      maxUses,
+      expiresAt.toISOString(),
     )
     .run();
 
@@ -310,35 +310,44 @@ export async function handleInvite(
 
   const tokenHash = await sha256Hex(token);
   const row = await env.DB.prepare(
-    `SELECT t.purpose, t.expires_at, t.user_id, u.email, u.name, u.status
-     FROM user_tokens t JOIN users u ON u.id = t.user_id
+    `SELECT t.user_id, t.max_uses, t.used_count, t.expires_at, u.email, u.name, u.status
+     FROM user_tokens t
+     LEFT JOIN users u ON u.id = t.user_id
      WHERE t.token_hash = ?`,
   )
     .bind(tokenHash)
     .first<TokenRow>();
 
-  if (!row || row.expires_at <= new Date().toISOString()) {
+  if (
+    !row ||
+    row.expires_at <= new Date().toISOString() ||
+    (row.user_id === null && row.used_count >= row.max_uses)
+  ) {
     return jsonError('link is invalid or expired', 410);
   }
 
-  // 停用的邮箱不能靠兑换链接重新启用，先启用再重置
+  // 停用的邮箱不能靠重置链接恢复
   if (row.status === 'disabled') {
     return Response.json({ error: 'account disabled' }, { status: 403 });
   }
 
   if (request.method === 'GET') {
-    return Response.json({
-      email: row.email,
-      name: row.name,
-      purpose: row.purpose,
-    });
+    return Response.json(
+      row.user_id === null
+        ? { purpose: 'invite', domain: parseMailDomain(env.MAIL_DOMAIN) }
+        : { purpose: 'reset', email: row.email, name: row.name },
+    );
   }
 
   if (request.method !== 'POST') {
     return methodNotAllowed();
   }
 
-  const payload = await readJson<{ password?: unknown }>(request);
+  const payload = await readJson<{
+    username?: unknown;
+    name?: unknown;
+    password?: unknown;
+  }>(request);
 
   if (payload instanceof Response) {
     return payload;
@@ -350,7 +359,93 @@ export async function handleInvite(
     return badRequest(passwordError);
   }
 
-  // 条件删除当作闸门，并发兑换同一个 token 时只有一个能删到行
+  return row.user_id === null
+    ? activateInvite(env, tokenHash, payload, password)
+    : resetPassword(env, row.user_id, tokenHash, password);
+}
+
+/**
+ * 兑换邀请：建用户与消费令牌放在同一个批次里，用户名被占用时整批回滚，链接仍可重试。
+ */
+async function activateInvite(
+  env: Env,
+  tokenHash: string,
+  payload: { username?: unknown; name?: unknown; language?: unknown },
+  password: string,
+): Promise<Response> {
+  const domain = parseMailDomain(env.MAIL_DOMAIN);
+  const username =
+    typeof payload.username === 'string' ? payload.username.trim() : '';
+  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+  const requested =
+    typeof payload.language === 'string' ? payload.language.trim() : '';
+  const language = isLocale(requested) ? requested : DEFAULT_LOCALE;
+
+  if (!domain) {
+    return badRequest('mail domain is not configured');
+  }
+  const usernameError = validateUsername(username);
+
+  if (usernameError) {
+    return badRequest(usernameError);
+  }
+  const nameError = validateName(name);
+
+  if (nameError) {
+    return badRequest(nameError);
+  }
+
+  const id = crypto.randomUUID();
+  const email = `${username}@${domain}`;
+  const now = new Date().toISOString();
+
+  try {
+    const [created] = await env.DB.batch([
+      // 名额未用尽才插入，避免并发兑换同一链接时多建账号
+      env.DB.prepare(
+        `INSERT INTO users (id, email, name, password_hash, role, status, language)
+         SELECT ?, ?, ?, ?, 'user', 'active', ?
+         WHERE EXISTS (
+           SELECT 1 FROM user_tokens
+           WHERE token_hash = ? AND user_id IS NULL
+             AND used_count < max_uses AND expires_at > ?
+         )`,
+      ).bind(
+        id,
+        email,
+        name,
+        await hashPassword(password),
+        language,
+        tokenHash,
+        now,
+      ),
+      env.DB.prepare(
+        `UPDATE user_tokens SET used_count = used_count + 1
+         WHERE token_hash = ? AND user_id IS NULL
+           AND used_count < max_uses AND expires_at > ?`,
+      ).bind(tokenHash, now),
+    ]);
+
+    if (created?.meta.changes !== 1) {
+      return jsonError('link is invalid or expired', 410);
+    }
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return jsonError('username taken', 409);
+    }
+    throw error;
+  }
+
+  return loginWithSession(env, id);
+}
+
+async function resetPassword(
+  env: Env,
+  userId: string,
+  tokenHash: string,
+  password: string,
+): Promise<Response> {
+  // 条件删除当作闸门，并发兑换同一个令牌时只有一个能删到行
   const claimed = await env.DB.prepare(
     'DELETE FROM user_tokens WHERE token_hash = ?',
   )
@@ -361,25 +456,25 @@ export async function handleInvite(
     return jsonError('link is invalid or expired', 410);
   }
 
-  // 邀请链接负责激活，重置链接只换密码
-  await env.DB.prepare(
-    row.purpose === 'invite'
-      ? `UPDATE users SET password_hash = ?, status = 'active' WHERE id = ?`
-      : `UPDATE users SET password_hash = ? WHERE id = ?`,
-  )
-    .bind(await hashPassword(password), row.user_id)
+  await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .bind(await hashPassword(password), userId)
     .run();
 
   // 设置新密码后作废该账号已有会话
   await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?')
-    .bind(row.user_id)
+    .bind(userId)
     .run();
 
-  const sessionToken = await createSession(env, row.user_id);
+  return loginWithSession(env, userId);
+}
+
+// 签发会话并把用户资料返回给客户端
+async function loginWithSession(env: Env, userId: string): Promise<Response> {
+  const sessionToken = await createSession(env, userId);
   const user = await env.DB.prepare(
     'SELECT id, email, name, language, role FROM users WHERE id = ?',
   )
-    .bind(row.user_id)
+    .bind(userId)
     .first<AuthUser>();
 
   return Response.json(
@@ -395,4 +490,14 @@ export async function handleInvite(
     },
     { headers: { 'Set-Cookie': sessionCookie(sessionToken) } },
   );
+}
+
+/**
+ * 清理过期的一次性链接，由定时任务调用。
+ */
+export async function purgeExpiredTokens(env: Env): Promise<void> {
+  // expires_at 存的是 ISO，用 datetime('now') 比较会因 'T' > ' ' 恒不成立
+  await env.DB.prepare('DELETE FROM user_tokens WHERE expires_at < ?')
+    .bind(new Date().toISOString())
+    .run();
 }

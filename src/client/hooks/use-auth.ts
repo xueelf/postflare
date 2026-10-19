@@ -23,6 +23,13 @@ export interface AuthState {
   mailDomain: string;
 }
 
+export interface InviteValues {
+  username?: string;
+  name?: string;
+  password: string;
+  language?: string;
+}
+
 // 服务端错误码 → 文案键
 const AUTH_ERRORS: Record<string, MessageKey> = {
   'username taken': 'auth.errorUsernameTaken',
@@ -249,13 +256,13 @@ export function useAuth(navigate: NavigateFunction) {
   };
 
   // 一次性链接：设置密码后自动登录
-  const completeInvite = (token: string, password: string) => {
+  const completeInvite = (token: string, values: InviteValues) => {
     setAuthBusy(true);
 
     return fetch(`/api/invite/${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify(values),
     })
       .then(async res => {
         setAuthBusy(false);

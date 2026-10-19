@@ -603,6 +603,37 @@ export function randomHex(bytes: number): string {
     .join('');
 }
 
+// 人类可读字母表：去掉 I、l、1、O、0 等易混字符，取自 Nextcloud 的 CHAR_HUMAN_READABLE
+const TOKEN_ALPHABET = 'abcdefgijkmnopqrstwxyzABCDEFGHJKLMNPQRSTWXYZ23456789';
+// 掩码取不小于字母表长度的 2 的幂减一，越界的随机值丢弃，避免取模造成分布不均（同 nanoid）
+const TOKEN_MASK =
+  (2 << (31 - Math.clz32((TOKEN_ALPHABET.length - 1) | 1))) - 1;
+
+/**
+ * 生成链接令牌，字母表与拒绝采样保证每个字符等概率。
+ */
+export function randomToken(length: number): string {
+  const step = Math.ceil((1.6 * TOKEN_MASK * length) / TOKEN_ALPHABET.length);
+
+  let token = '';
+
+  while (token.length < length) {
+    for (const value of crypto.getRandomValues(new Uint8Array(step))) {
+      const index = value & TOKEN_MASK;
+
+      if (index < TOKEN_ALPHABET.length) {
+        token += TOKEN_ALPHABET[index];
+
+        if (token.length === length) {
+          break;
+        }
+      }
+    }
+  }
+
+  return token;
+}
+
 function toBase64(bytes: Uint8Array): string {
   let binary = '';
 
