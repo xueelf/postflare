@@ -347,10 +347,8 @@ async function changePassword(env: Env, request: Request): Promise<Response> {
     .first<{ password_hash: string }>();
 
   if (!record || !(await verifyPassword(current, record.password_hash))) {
-    return Response.json(
-      { error: 'current password is incorrect' },
-      { status: 401 },
-    );
+    // 会话有效，只是当前密码填错，用 400，避免客户端按 401 清理会话
+    return badRequest('current password is incorrect');
   }
 
   await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
