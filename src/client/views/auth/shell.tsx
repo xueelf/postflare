@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Logo } from '../../components/logo';
+import { Logo } from '#/client/components/logo';
 
 import './style.css';
 

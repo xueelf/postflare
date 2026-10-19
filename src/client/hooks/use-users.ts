@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { apiFetch } from '../api';
-import { useToast } from '../components/toast';
-import { type MessageKey, useI18n } from '../i18n';
+import { apiFetch } from '#/client/api';
+import { useToast } from '#/client/components/toast';
+import { type MessageKey, useI18n } from '#/client/i18n';
 
 export interface UserSummary {
   id: string;

@@ -10,12 +10,7 @@ import {
   useEffect,
 } from 'react';
 
-import {
-  type Locale,
-  DEFAULT_LOCALE,
-  isLocale,
-  matchLocale,
-} from '../../locales';
+import { type Locale, DEFAULT_LOCALE, isLocale, matchLocale } from '#/locales';
 
 import { de } from './de';
 import { en } from './en';
@@ -35,7 +30,7 @@ export {
   type Locale,
   LOCALES,
   matchLocale,
-} from '../../locales';
+} from '#/locales';
 export type MessageParams = Record<string, string | number>;
 
 /** 语言选择列表的名称，各自用本语言书写 */

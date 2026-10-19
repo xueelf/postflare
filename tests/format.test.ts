@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { templateHtml, textToHtml } from '../src/client/format';
+import { templateHtml, textToHtml } from '#/client/format';
 
 test('textToHtml 按空行拆段并保留段内换行', () => {
   expect(textToHtml('a\n\nb')).toBe('<p>a</p><p>b</p>');

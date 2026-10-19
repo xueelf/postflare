@@ -1,11 +1,11 @@
 import { type FormEvent, useEffect, useState } from 'react';
 
-import { Button } from '../../components/button';
-import { DialogHead } from '../../components/dialog-head';
-import { FormItem } from '../../components/form-item';
-import { Notice } from '../../components/notice';
-import type { InviteValues } from '../../hooks/use-auth';
-import { useI18n } from '../../i18n';
+import { Button } from '#/client/components/button';
+import { DialogHead } from '#/client/components/dialog-head';
+import { FormItem } from '#/client/components/form-item';
+import { Notice } from '#/client/components/notice';
+import type { InviteValues } from '#/client/hooks/use-auth';
+import { useI18n } from '#/client/i18n';
 
 import { ConfirmPasswordField } from './confirm-password';
 import { AuthShell } from './shell';

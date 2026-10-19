@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, isLocale } from '../locales';
+import { DEFAULT_LOCALE, isLocale } from '#/locales';
 
 import { checkMailDomain, parseMailDomain } from './domains';
 import {

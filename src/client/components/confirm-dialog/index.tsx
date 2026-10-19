@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 
-import { useI18n } from '../../i18n';
-import { Modal } from '../modal';
+import { Modal } from '#/client/components/modal';
+import { useI18n } from '#/client/i18n';
 
 import './style.css';
 
-import { Button } from '../button';
+import { Button } from '#/client/components/button';
 
 export interface ConfirmDialogProps {
   title: string;

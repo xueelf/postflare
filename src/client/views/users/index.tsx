@@ -9,22 +9,22 @@ import {
 } from '@remixicon/react';
 import { type ReactNode, useId, useState } from 'react';
 
-import { INVITE_MAX_TTL_SECONDS, INVITE_MAX_USES } from '../../../invites';
-import { ActionMenu } from '../../components/action-menu';
-import { Button } from '../../components/button';
-import { EmptyState } from '../../components/empty-state';
-import { FormItem } from '../../components/form-item';
-import { Modal } from '../../components/modal';
-import { PanelHead } from '../../components/panel-head';
-import { useToast } from '../../components/toast';
-import { dateTimeInputValue, dateTimeValue, formatDate } from '../../format';
-import type { ConfirmRequest } from '../../hooks/use-confirm';
+import { ActionMenu } from '#/client/components/action-menu';
+import { Button } from '#/client/components/button';
+import { EmptyState } from '#/client/components/empty-state';
+import { FormItem } from '#/client/components/form-item';
+import { Modal } from '#/client/components/modal';
+import { PanelHead } from '#/client/components/panel-head';
+import { useToast } from '#/client/components/toast';
+import { dateTimeInputValue, dateTimeValue, formatDate } from '#/client/format';
+import type { ConfirmRequest } from '#/client/hooks/use-confirm';
 import {
   type IssuedLink,
   type UserSummary,
   useUsers,
-} from '../../hooks/use-users';
-import { type MessageKey, useI18n } from '../../i18n';
+} from '#/client/hooks/use-users';
+import { type MessageKey, useI18n } from '#/client/i18n';
+import { INVITE_MAX_TTL_SECONDS, INVITE_MAX_USES } from '#/invites';
 
 import './style.css';
 

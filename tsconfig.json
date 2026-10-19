@@ -7,6 +7,10 @@
 
     "module": "Preserve",
     "moduleResolution": "bundler",
+    "paths": {
+      "~/*": ["./*"],
+      "#/*": ["./src/*"]
+    },
     "types": ["bun"],
     "resolveJsonModule": true,
 

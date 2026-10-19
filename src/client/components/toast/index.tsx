@@ -15,8 +15,8 @@ import {
   useState,
 } from 'react';
 
-import { useI18n } from '../../i18n';
-import { Button } from '../button';
+import { Button } from '#/client/components/button';
+import { useI18n } from '#/client/i18n';
 
 import './style.css';
 

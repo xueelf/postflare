@@ -1,12 +1,17 @@
 import { RiArrowRightSLine } from '@remixicon/react';
 import { Fragment, useId, useState } from 'react';
 
-import { Button } from '../../components/button';
-import { FormItem } from '../../components/form-item';
-import { Modal } from '../../components/modal';
-import { Notice } from '../../components/notice';
-import type { ThemeChoice } from '../../hooks/use-theme';
-import { type MessageKey, LOCALE_LABELS, LOCALES, useI18n } from '../../i18n';
+import { Button } from '#/client/components/button';
+import { FormItem } from '#/client/components/form-item';
+import { Modal } from '#/client/components/modal';
+import { Notice } from '#/client/components/notice';
+import type { ThemeChoice } from '#/client/hooks/use-theme';
+import {
+  type MessageKey,
+  LOCALE_LABELS,
+  LOCALES,
+  useI18n,
+} from '#/client/i18n';
 
 import './style.css';
 

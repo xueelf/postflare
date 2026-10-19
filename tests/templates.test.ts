@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { extractDataImages } from '../src/worker/templates';
+import { extractDataImages } from '#/worker/templates';
 
 test('extractDataImages 提取内联图片并重写为应用地址', () => {
   const png = Buffer.from('fake-image').toString('base64');

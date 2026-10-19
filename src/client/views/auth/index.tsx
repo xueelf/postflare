@@ -1,11 +1,10 @@
 import { RiCheckLine, RiCloseLine, RiLoader4Line } from '@remixicon/react';
 import { type FormEvent, useState } from 'react';
 
-import type { DomainStatus } from '../../../worker/domains';
-import { DialogHead } from '../../components/dialog-head';
-import { FormHelp, FormItem } from '../../components/form-item';
-import { Modal } from '../../components/modal';
-import { Notice } from '../../components/notice';
+import { DialogHead } from '#/client/components/dialog-head';
+import { FormHelp, FormItem } from '#/client/components/form-item';
+import { Modal } from '#/client/components/modal';
+import { Notice } from '#/client/components/notice';
 import {
   type Locale,
   type MessageKey,
@@ -15,11 +14,12 @@ import {
   LOCALES,
   translate,
   useI18n,
-} from '../../i18n';
+} from '#/client/i18n';
+import type { DomainStatus } from '#/worker/domains';
 
 import './style.css';
 
-import { Button } from '../../components/button';
+import { Button } from '#/client/components/button';
 
 import { ConfirmPasswordField } from './confirm-password';
 import { AuthShell } from './shell';

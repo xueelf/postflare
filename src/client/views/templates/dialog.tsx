@@ -1,14 +1,14 @@
 import { RiFileUploadLine } from '@remixicon/react';
 import { useEffect, useRef } from 'react';
 
-import { Editor } from '../../components/editor';
-import { Modal } from '../../components/modal';
-import type { TemplateDraft } from '../../hooks/use-templates';
-import { useI18n } from '../../i18n';
+import { Editor } from '#/client/components/editor';
+import { Modal } from '#/client/components/modal';
+import type { TemplateDraft } from '#/client/hooks/use-templates';
+import { useI18n } from '#/client/i18n';
 
 import './style.css';
 
-import { Button } from '../../components/button';
+import { Button } from '#/client/components/button';
 
 export interface TemplateDialogProps {
   draft: TemplateDraft;

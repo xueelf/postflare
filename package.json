@@ -6,6 +6,10 @@
   "license": "MIT",
   "author": "Yuki <admin@yuki.sh>",
   "type": "module",
+  "imports": {
+    "#/*": "./src/*",
+    "~/*": "./*"
+  },
   "scripts": {
     "build": "bun build index.html --outdir dist",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",

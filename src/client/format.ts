@@ -1,4 +1,4 @@
-import type { Locale } from '../locales';
+import type { Locale } from '#/locales';
 
 /**
  * 共享工具：显示格式化、内容转换与文件读取。

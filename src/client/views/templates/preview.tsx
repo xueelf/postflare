@@ -5,19 +5,19 @@ import {
   RiFileTextLine,
 } from '@remixicon/react';
 
-import { ActionMenu } from '../../components/action-menu';
-import { BodyFrame } from '../../components/body-frame';
-import { Button } from '../../components/button';
-import { EmptyState } from '../../components/empty-state';
-import { MessageView } from '../../components/message-view';
+import { ActionMenu } from '#/client/components/action-menu';
+import { BodyFrame } from '#/client/components/body-frame';
+import { Button } from '#/client/components/button';
+import { EmptyState } from '#/client/components/empty-state';
+import { MessageView } from '#/client/components/message-view';
 import {
   dateTimeValue,
   displayName,
   formatDate,
   templateHtml,
-} from '../../format';
-import type { Template } from '../../hooks/use-templates';
-import { useI18n } from '../../i18n';
+} from '#/client/format';
+import type { Template } from '#/client/hooks/use-templates';
+import { useI18n } from '#/client/i18n';
 
 export interface TemplatePreviewProps {
   template: Template | null;
