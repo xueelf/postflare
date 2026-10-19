@@ -89,6 +89,12 @@ export const it: Record<MessageKey, string> = {
   'common.retry': 'Riprova',
   'compose.body': 'Corpo',
   'compose.bold': 'Grassetto',
+  'compose.errorDraftEmpty': 'La bozza è vuota',
+  'compose.errorEmpty': 'Il corpo del messaggio è vuoto',
+  'compose.errorRecipient': 'Indirizzo del destinatario non valido',
+  'compose.errorSubjectTooLong': "L'oggetto è troppo lungo",
+  'compose.errorTooLarge': 'Il corpo del messaggio è troppo lungo',
+  'compose.errorTooManyRecipients': 'Troppi destinatari',
   'compose.imageTooLarge':
     "L'immagine è troppo grande (max 10MB), comprimila e riprova",
   'compose.imageUploadFailed':
@@ -99,7 +105,6 @@ export const it: Record<MessageKey, string> = {
   'compose.saving': 'Salvataggio…',
   'compose.send': 'Invia',
   'compose.sendFailed': 'Invio non riuscito, riprova',
-  'compose.sendFailedStatus': 'Invio non riuscito ({status})',
   'compose.sending': 'Invio…',
   'compose.sent': 'Messaggio inviato',
   'compose.strike': 'Barrato',

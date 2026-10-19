@@ -2,13 +2,40 @@ import { ATTACHMENT_URL_RE, attachmentIdsIn } from './attachments';
 import type { AuthUser } from './auth';
 import { chunks, DB_PARAM_LIMIT } from './batch';
 import { badRequest, notFound, readJson } from './http';
-import { normalizeMessageId } from './inbound';
+import { BODY_MAX_BYTES, normalizeMessageId } from './inbound';
 import { purgeMessages } from './messages';
 
 const RECIPIENT_PATTERN = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
+// 与 D1 单行上限匹配，发送前拒绝超限正文，避免邮件已发出却写不进本地副本
+const MAX_SUBJECT_LENGTH = 998;
+const MAX_RECIPIENTS = 50;
+
+export function recipientsOf(value: string): string[] {
+  return value
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean);
+}
 
 export function validRecipients(value: string): boolean {
-  return value.split(',').every(part => RECIPIENT_PATTERN.test(part.trim()));
+  const recipients = recipientsOf(value);
+
+  return (
+    recipients.length > 0 &&
+    recipients.every(part => RECIPIENT_PATTERN.test(part))
+  );
+}
+
+function bodyTooLarge(text: string, html: string): boolean {
+  const encoder = new TextEncoder();
+
+  return (
+    encoder.encode(text).length + encoder.encode(html).length > BODY_MAX_BYTES
+  );
+}
+
+function subjectTooLong(subject: string): boolean {
+  return subject.length > MAX_SUBJECT_LENGTH;
 }
 
 export async function composeMessage(
@@ -37,8 +64,20 @@ export async function composeMessage(
     return badRequest('invalid recipient');
   }
 
+  if (recipientsOf(to).length > MAX_RECIPIENTS) {
+    return badRequest('too many recipients');
+  }
+
   if (!text && !html.includes('<img')) {
     return badRequest('message text is empty');
+  }
+
+  if (bodyTooLarge(text, html)) {
+    return badRequest('message too large');
+  }
+
+  if (subjectTooLong(subject)) {
+    return badRequest('subject too long');
   }
 
   // 空主题照原样存，界面按当前语言显示「无主题」
@@ -165,6 +204,18 @@ export async function saveDraft(
 
   if (!to && !subject && !text && !html.includes('<img')) {
     return badRequest('draft is empty');
+  }
+
+  if (recipientsOf(to).length > MAX_RECIPIENTS) {
+    return badRequest('too many recipients');
+  }
+
+  if (bodyTooLarge(text, html)) {
+    return badRequest('message too large');
+  }
+
+  if (subjectTooLong(subject)) {
+    return badRequest('subject too long');
   }
 
   const id =
