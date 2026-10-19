@@ -64,6 +64,15 @@ export function dateTimeValue(value: string): string {
 }
 
 /**
+ * Date 转 datetime-local 输入框的本地时间值（'YYYY-MM-DDTHH:mm'）。
+ */
+export function dateTimeInputValue(date: Date): string {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+
+  return local.toISOString().slice(0, 16);
+}
+
+/**
  * 纯文本转成编辑器 HTML（兼容以纯文本保存的草稿与模板）。
  */
 export function textToHtml(text: string): string {

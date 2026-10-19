@@ -4,6 +4,7 @@ import { Button } from '../../components/button';
 import { DialogHead } from '../../components/dialog-head';
 import { FormItem } from '../../components/form-item';
 import { Notice } from '../../components/notice';
+import type { InviteValues } from '../../hooks/use-auth';
 import { useI18n } from '../../i18n';
 
 import { ConfirmPasswordField } from './confirm-password';
@@ -12,24 +13,27 @@ import { AuthShell } from './shell';
 import './style.css';
 
 interface InviteInfo {
-  email: string;
-  name: string;
   purpose: 'invite' | 'reset';
+  domain?: string;
+  email?: string;
+  name?: string;
 }
 
 export interface InviteProps {
   token: string;
   busy: boolean;
-  onSubmit: (token: string, password: string) => Promise<boolean>;
+  onSubmit: (token: string, values: InviteValues) => Promise<boolean>;
 }
 
 /**
- * 一次性链接：凭链接设置密码，成功后自动登录。
+ * 一次性链接：邀请由对方自己选用户名与昵称，重置只换密码，成功后自动登录。
  */
 export function Invite({ token, busy, onSubmit }: InviteProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [info, setInfo] = useState<InviteInfo | null>(null);
   const [error, setError] = useState('');
+  const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
@@ -45,24 +49,29 @@ export function Invite({ token, busy, onSubmit }: InviteProps) {
       .catch(() => setError(t('auth.linkCheckFailed')));
   }, [token, t]);
 
+  const invite = info?.purpose === 'invite';
+  const clean = username.trim();
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onSubmit(token, password);
+
+    onSubmit(
+      token,
+      invite
+        ? { username: clean, name: name.trim(), password, language: locale }
+        : { password },
+    );
   };
 
   return (
     <AuthShell>
       <form className="auth-card" onSubmit={submit}>
         <DialogHead
-          title={
-            info?.purpose === 'reset'
-              ? t('auth.resetPassword')
-              : t('auth.setPassword')
-          }
+          title={invite ? t('auth.createAccount') : t('auth.resetPassword')}
         />
         <div className="auth-card-body">
           {error ? (
-            <Notice role="alert" className="auth-notice-slot">
+            <Notice role="alert">
               <strong>{error}</strong>
               <span>{t('auth.linkExpiredHint')}</span>
             </Notice>
@@ -70,12 +79,46 @@ export function Invite({ token, busy, onSubmit }: InviteProps) {
             <p className="meta">{t('common.loading')}</p>
           ) : (
             <>
-              <FormItem label={t('auth.account')}>
-                <div className="auth-domain-row">
-                  <span className="auth-domain-name">{info.email}</span>
-                </div>
-              </FormItem>
-              <FormItem label={t('auth.newPassword')}>
+              {invite ? (
+                <>
+                  <FormItem
+                    label={
+                      <>
+                        <span>{t('auth.username')}</span>
+                        {clean && (
+                          <span className="form-ref">
+                            {clean}@{info.domain}
+                          </span>
+                        )}
+                      </>
+                    }
+                  >
+                    <input
+                      value={username}
+                      required
+                      autoComplete="off"
+                      onChange={event => setUsername(event.target.value)}
+                    />
+                  </FormItem>
+                  <FormItem label={t('auth.name')}>
+                    <input
+                      value={name}
+                      required
+                      autoComplete="nickname"
+                      onChange={event => setName(event.target.value)}
+                    />
+                  </FormItem>
+                </>
+              ) : (
+                <FormItem label={t('auth.account')}>
+                  <div className="auth-domain-row">
+                    <span className="auth-domain-name">{info.email}</span>
+                  </div>
+                </FormItem>
+              )}
+              <FormItem
+                label={invite ? t('auth.password') : t('auth.newPassword')}
+              >
                 <input
                   type="password"
                   required
@@ -89,9 +132,13 @@ export function Invite({ token, busy, onSubmit }: InviteProps) {
                 type="submit"
                 variant="primary"
                 className="auth-submit"
-                disabled={busy}
+                disabled={busy || (invite && (!clean || !name.trim()))}
               >
-                {busy ? t('auth.submitting') : t('auth.setPassword')}
+                {busy
+                  ? t('auth.submitting')
+                  : invite
+                    ? t('auth.createAccount')
+                    : t('auth.setPassword')}
               </Button>
             </>
           )}

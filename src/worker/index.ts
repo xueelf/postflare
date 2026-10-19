@@ -24,7 +24,12 @@ import {
   listTemplates,
   updateTemplate,
 } from './templates';
-import { handleInvite, handleUsers } from './users';
+import {
+  createInvite,
+  handleInvite,
+  handleUsers,
+  purgeExpiredTokens,
+} from './users';
 
 const USERS_PATH = '/api/users/';
 const INVITE_PATH = '/api/invite/';
@@ -179,6 +184,11 @@ const ROUTES: Route[] = [
     handler: ({ env, params, user }) =>
       deleteTemplate(env, param(params, 'id'), user.id),
   },
+  {
+    method: 'POST',
+    pattern: '/api/invites',
+    handler: ({ env, request, user }) => createInvite(env, request, user),
+  },
 ];
 
 export default {
@@ -234,5 +244,6 @@ export default {
   ): Promise<void> {
     ctx.waitUntil(purgeExpired(env));
     ctx.waitUntil(purgeExpiredSessions(env));
+    ctx.waitUntil(purgeExpiredTokens(env));
   },
 };
