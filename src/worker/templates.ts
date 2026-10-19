@@ -1,4 +1,4 @@
-import { attachmentIdsIn, IMAGE_MAX_BYTES } from './attachments';
+import { extractAttachmentIds, IMAGE_MAX_BYTES } from './attachments';
 import { chunks, DB_PARAM_LIMIT, deleteObjects } from './batch';
 import { badRequest, notFound, readJson } from './http';
 
@@ -157,7 +157,7 @@ async function pruneTemplateImages(
   templateId: string,
   html: string,
 ): Promise<void> {
-  const referenced = new Set(attachmentIdsIn(html));
+  const referenced = new Set(extractAttachmentIds(html));
   const { results } = await env.DB.prepare(
     `SELECT id, storage_key FROM attachments WHERE template_id = ?`,
   )

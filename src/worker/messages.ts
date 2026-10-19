@@ -169,7 +169,7 @@ const FILENAME_STRIP = /[\\/:*?"<>|]/g;
 const CONTROL_CHARS = /\p{Cc}/gu;
 
 /** 文件名用主题，去掉文件名不允许的字符，为空或过长时退回 id */
-function emlFilename(subject: string, id: string): string {
+function buildEmlFilename(subject: string, id: string): string {
   const cleaned = subject
     .replace(CONTROL_CHARS, ' ')
     .replace(FILENAME_STRIP, ' ')
@@ -280,7 +280,7 @@ export async function downloadMessage(
     return notFound();
   }
 
-  const filename = emlFilename(message.subject, id);
+  const filename = buildEmlFilename(message.subject, id);
   const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
   const raw = message.raw_storage_key
     ? await env.ATTACHMENTS.get(message.raw_storage_key)

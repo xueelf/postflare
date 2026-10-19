@@ -61,7 +61,7 @@ export function useMessages(
   const toast = useToast();
   const [search, setSearch] = useState(route.q);
   const query = useDebouncedValue(search.trim(), 300);
-  const [listVersion, setListVersion] = useState(0);
+  const [listRevision, setListRevision] = useState(0);
   const [messages, setMessages] = useState<MessageSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -83,7 +83,7 @@ export function useMessages(
       .then(data => setCounts(data))
       .catch(() => {});
 
-  const refreshList = () => setListVersion(current => current + 1);
+  const refreshList = () => setListRevision(current => current + 1);
 
   useEffect(() => {
     if (!ready) {
@@ -115,7 +115,7 @@ export function useMessages(
     const controller = new AbortController();
     const suffix = route.q ? `&q=${encodeURIComponent(route.q)}` : '';
 
-    listKeyRef.current = `${route.view}|${route.q}|${listVersion}`;
+    listKeyRef.current = `${route.view}|${route.q}|${listRevision}`;
 
     apiFetch(`/api/messages?mailbox=${route.view}${suffix}`, {
       signal: controller.signal,
@@ -130,7 +130,7 @@ export function useMessages(
       .catch(() => {});
 
     return () => controller.abort();
-  }, [ready, route.view, route.q, listVersion]);
+  }, [ready, route.view, route.q, listRevision]);
 
   // 触底加载下一页，视图、搜索词或列表刷新后旧响应直接丢弃
   const loadMore = () => {

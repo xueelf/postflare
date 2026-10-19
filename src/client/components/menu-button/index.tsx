@@ -2,7 +2,7 @@ import { RiMenuLine } from '@remixicon/react';
 
 import { useI18n } from '#/client/i18n';
 
-import { Button } from './button';
+import { Button } from '../button';
 
 /**
  * 移动端抽屉入口按钮（桌面隐藏，规则见 layout/style.css）。

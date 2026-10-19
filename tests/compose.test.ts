@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
 
-import { recipientsOf, validRecipients } from '#/worker/compose';
+import { parseRecipients, validRecipients } from '#/worker/compose';
 
-test('recipientsOf 忽略空白项', () => {
-  expect(recipientsOf('a@b.c, , d@e.f ')).toEqual(['a@b.c', 'd@e.f']);
-  expect(recipientsOf('  ')).toEqual([]);
+test('parseRecipients 忽略空白项', () => {
+  expect(parseRecipients('a@b.c, , d@e.f ')).toEqual(['a@b.c', 'd@e.f']);
+  expect(parseRecipients('  ')).toEqual([]);
 });
 
 test('validRecipients 接受单个与逗号分隔的地址', () => {

@@ -1,4 +1,4 @@
-import { ATTACHMENT_URL_RE, attachmentIdsIn } from './attachments';
+import { ATTACHMENT_URL_RE, extractAttachmentIds } from './attachments';
 import type { AuthUser } from './auth';
 import { chunks, DB_PARAM_LIMIT } from './batch';
 import { badRequest, notFound, readJson } from './http';
@@ -10,7 +10,7 @@ const RECIPIENT_PATTERN = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
 const MAX_SUBJECT_LENGTH = 998;
 const MAX_RECIPIENTS = 50;
 
-export function recipientsOf(value: string): string[] {
+export function parseRecipients(value: string): string[] {
   return value
     .split(',')
     .map(part => part.trim())
@@ -18,7 +18,7 @@ export function recipientsOf(value: string): string[] {
 }
 
 export function validRecipients(value: string): boolean {
-  const recipients = recipientsOf(value);
+  const recipients = parseRecipients(value);
 
   return (
     recipients.length > 0 &&
@@ -64,7 +64,7 @@ export async function composeMessage(
     return badRequest('invalid recipient');
   }
 
-  if (recipientsOf(to).length > MAX_RECIPIENTS) {
+  if (parseRecipients(to).length > MAX_RECIPIENTS) {
     return badRequest('too many recipients');
   }
 
@@ -84,7 +84,7 @@ export async function composeMessage(
   const cleanSubject = subject;
   // 正文里的应用图片地址换成 cid，图片作为内联附件随信发出
   // 只装载属于当前用户的附件，否则拿到 id 就能把别人的图片发出去
-  const inlineIds = attachmentIdsIn(html);
+  const inlineIds = extractAttachmentIds(html);
   const attachments: EmailAttachment[] = [];
   const sentIds = new Set<string>();
 
@@ -206,7 +206,7 @@ export async function saveDraft(
     return badRequest('draft is empty');
   }
 
-  if (recipientsOf(to).length > MAX_RECIPIENTS) {
+  if (parseRecipients(to).length > MAX_RECIPIENTS) {
     return badRequest('too many recipients');
   }
 
