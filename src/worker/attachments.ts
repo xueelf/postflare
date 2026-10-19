@@ -12,7 +12,7 @@ export interface AttachmentRow {
 // 正文里引用内联图片的应用地址
 export const ATTACHMENT_URL_RE = /\/api\/attachments\/([\w-]+)/g;
 
-export function attachmentIdsIn(html: string): string[] {
+export function extractAttachmentIds(html: string): string[] {
   const ids = new Set<string>();
 
   for (const match of html.matchAll(ATTACHMENT_URL_RE)) {

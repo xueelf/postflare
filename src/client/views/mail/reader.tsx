@@ -65,7 +65,7 @@ export function Reader({
   const quote = message.body_html
     ? { visible: '', quoted: '' }
     : splitQuoted(message.body_text ?? '');
-  const messageWho =
+  const correspondent =
     message.direction === 'outbound'
       ? accountName
       : message.from_name || message.from_address;
@@ -155,8 +155,8 @@ export function Reader({
       </div>
       <hr />
       <MessageView
-        avatarName={messageWho}
-        correspondent={messageWho}
+        avatarName={correspondent}
+        correspondent={correspondent}
         addr={
           message.direction === 'outbound'
             ? accountEmail
