@@ -91,6 +91,12 @@ export const ja: Record<MessageKey, string> = {
   'common.retry': '再試行',
   'compose.body': '本文',
   'compose.bold': '太字',
+  'compose.errorDraftEmpty': '下書きが空です',
+  'compose.errorEmpty': '本文が空です',
+  'compose.errorRecipient': '宛先アドレスが無効です',
+  'compose.errorSubjectTooLong': '件名が長すぎます',
+  'compose.errorTooLarge': '本文が長すぎます',
+  'compose.errorTooManyRecipients': '宛先が多すぎます',
   'compose.imageTooLarge':
     '画像が大きすぎますので、圧縮してから再試行してください',
   'compose.imageUploadFailed':
@@ -101,7 +107,6 @@ export const ja: Record<MessageKey, string> = {
   'compose.saving': '保存中…',
   'compose.send': '送信',
   'compose.sendFailed': '送信に失敗しましたので、再試行してください',
-  'compose.sendFailedStatus': '送信に失敗しました（{status}）',
   'compose.sending': '送信中…',
   'compose.sent': 'メールを送信しました',
   'compose.strike': '取り消し線',

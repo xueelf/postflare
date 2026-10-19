@@ -4,12 +4,22 @@ import type { NavigateFunction } from 'react-router';
 import { apiFetch, IMAGE_MAX_BYTES } from '#/client/api';
 import { useToast } from '#/client/components/toast';
 import { dateTimeValue, formatTime, textToHtml } from '#/client/format';
-import { useI18n } from '#/client/i18n';
+import { type MessageKey, useI18n } from '#/client/i18n';
 import { type MailRoute, viewPath } from '#/client/route';
 
 import type { MessageDetail } from './use-messages';
 
 const AUTOSAVE_DELAY = 2000;
+
+// 服务端错误码 → 文案键
+const COMPOSE_ERRORS: Record<string, MessageKey> = {
+  'invalid recipient': 'compose.errorRecipient',
+  'too many recipients': 'compose.errorTooManyRecipients',
+  'message text is empty': 'compose.errorEmpty',
+  'draft is empty': 'compose.errorDraftEmpty',
+  'message too large': 'compose.errorTooLarge',
+  'subject too long': 'compose.errorSubjectTooLong',
+};
 
 interface ComposeSnapshot {
   to: string;
@@ -33,6 +43,10 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
   const { navigate, closeDrawer, openMessage, refreshList, refreshCounts } =
     deps;
   const { locale, t } = useI18n();
+
+  // 已知的服务端错误按码翻译，其余用统一失败文案
+  const composeError = (error: string | undefined, fallback: MessageKey) =>
+    t(COMPOSE_ERRORS[error ?? ''] ?? fallback);
 
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
@@ -68,7 +82,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
   let composeStatus = '';
 
   if (draftError) {
-    composeStatus = t('compose.saveFailed');
+    composeStatus = draftError;
   } else if (draftBusy || (!draftSaved && !composeEmpty)) {
     composeStatus = t('compose.saving');
   } else if (draftSaved) {
@@ -162,7 +176,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         if (!res.ok) {
           const data = (await res.json()) as { error?: string };
 
-          setDraftError(data.error ?? t('compose.saveFailed'));
+          setDraftError(composeError(data.error, 'compose.saveFailed'));
           setDraftBusy(false);
 
           return null;
@@ -279,9 +293,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         if (!res.ok) {
           const data = (await res.json()) as { error?: string };
 
-          toast.error(
-            data.error ?? t('compose.sendFailedStatus', { status: res.status }),
-          );
+          toast.error(composeError(data.error, 'compose.sendFailed'));
           setComposeBusy(false);
 
           return;
