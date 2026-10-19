@@ -121,6 +121,7 @@ export const es: Record<MessageKey, string> = {
   'mail.discardMessage': 'Esta acción no se puede deshacer.',
   'mail.discardTitle': '¿Descartar este borrador?',
   'mail.draftDiscarded': 'Borrador descartado',
+  'mail.download': 'Descargar mensaje',
   'mail.editDraft': 'Editar borrador',
   'mail.emptyMailbox': 'Vaciar',
   'mail.emptyMailboxMessage':

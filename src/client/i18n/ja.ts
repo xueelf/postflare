@@ -119,6 +119,7 @@ export const ja: Record<MessageKey, string> = {
   'mail.discardMessage': '破棄すると元に戻せません。',
   'mail.discardTitle': 'この下書きを破棄しますか？',
   'mail.draftDiscarded': '下書きを破棄しました',
+  'mail.download': 'メッセージをダウンロード',
   'mail.editDraft': '下書きを編集',
   'mail.emptyMailbox': '空にする',
   'mail.emptyMailboxMessage': '中のメールは完全に削除されます。',
