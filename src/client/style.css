@@ -80,7 +80,7 @@
   --popover-background-color: var(--surface);
   --popover-border-width: 1px;
   --popover-border-color: var(--border);
-  --popover-border-radius: var(--radius-container);
+  --popover-border-radius: var(--radius-control);
   --popover-color: var(--text);
   --popover-padding: 4px;
   --th-border-block-end-color: var(--line);
@@ -179,6 +179,8 @@ hr {
 .search {
   display: flex;
   flex: 1;
+  /* 窄屏下允许收缩到内容最小宽度以下，避免头部把面板撑宽 */
+  min-width: 0;
   gap: 10px;
   align-items: center;
   height: 40px;
@@ -306,13 +308,12 @@ hr {
 }
 
 .message {
-  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: 12px;
   min-height: 0;
-  padding: 0 0 16px;
+  padding: 12px 16px;
 }
 
 .message-head {
@@ -382,23 +383,24 @@ button.message-identity {
   display: none;
 }
 
-.conversation {
+.message-body {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  padding: 12px 16px;
-}
-
-.message-body {
-  flex: 1;
-  min-height: 0;
   overflow-y: auto;
 }
 
-/* 邮件正文按白底渲染，明暗模式一致（来信的 HTML 假定白底，同 Gmail、Outlook 的处理） */
-.body-html {
+/* 附件与文本正文按内容排布，滚动由 message-body 承担，避免被 flex 压缩 */
+.message-body > * {
+  flex: none;
+}
+
+/* 邮件正文按白底渲染，明暗模式一致（来信的 HTML 假定白底，同 Gmail、Outlook 的处理）。
+   高度由 BodyFrame 按内容设置，撑不满时再由 flex 拉满剩余空间 */
+.message-body > .body-html {
   display: block;
+  flex: 1 0 auto;
   width: 100%;
   min-height: 240px;
   margin-top: 8px;
