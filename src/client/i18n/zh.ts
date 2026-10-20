@@ -121,6 +121,7 @@ export const zh = {
   'mail.expandSidebar': '展开侧栏',
   'mail.from': '发件人',
   'mail.list': '邮件列表',
+  'mail.loadRemoteContent': '加载远程内容',
   'mail.markSpam': '标记为垃圾邮件',
   'mail.movedToSpam': '已移入垃圾邮件',
   'mail.movedToTrash': '已移入回收站',

@@ -132,6 +132,7 @@ export const ja: Record<MessageKey, string> = {
   'mail.expandSidebar': 'サイドバーを展開',
   'mail.from': '差出人',
   'mail.list': 'メール一覧',
+  'mail.loadRemoteContent': 'リモートコンテンツを読み込む',
   'mail.markSpam': '迷惑メールとしてマーク',
   'mail.movedToSpam': '迷惑メールに移動しました',
   'mail.movedToTrash': 'ゴミ箱に移動しました',

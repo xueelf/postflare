@@ -127,6 +127,7 @@ export const ko: Record<MessageKey, string> = {
   'mail.expandSidebar': '사이드바 펼치기',
   'mail.from': '보낸 사람',
   'mail.list': '메일 목록',
+  'mail.loadRemoteContent': '원격 콘텐츠 불러오기',
   'mail.markSpam': '스팸으로 표시',
   'mail.movedToSpam': '스팸으로 이동했습니다',
   'mail.movedToTrash': '휴지통으로 이동했습니다',

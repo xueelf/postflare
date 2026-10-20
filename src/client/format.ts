@@ -97,18 +97,6 @@ export function templateHtml(body: string): string {
 }
 
 /**
- * 邮件正文 iframe 包装：在 head 起始处注入基础样式。
- * iframe 固定白底，链接颜色固定取浅色分支的 --accent-text（#2459c9）而不跟随应用主题，
- * 深色主题的浅蓝在白底上对比度不足。
- */
-export function emailHtml(body: string): string {
-  const style = '<style>a{color:#2459c9}a:visited{color:#2459c9}</style>';
-  const head = body.match(/<head[^>]*>/i);
-
-  return head ? body.replace(head[0], head[0] + style) : style + body;
-}
-
-/**
  * HTML 转纯文本（列表行摘要）。
  */
 export function htmlToText(html: string): string {

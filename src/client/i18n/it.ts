@@ -131,6 +131,7 @@ export const it: Record<MessageKey, string> = {
   'mail.expandSidebar': 'Espandi barra laterale',
   'mail.from': 'Da',
   'mail.list': 'Elenco messaggi',
+  'mail.loadRemoteContent': 'Carica contenuto remoto',
   'mail.markSpam': 'Segna come spam',
   'mail.movedToSpam': 'Spostato nello spam',
   'mail.movedToTrash': 'Spostato nel cestino',
