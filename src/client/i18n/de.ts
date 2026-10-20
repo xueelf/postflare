@@ -136,6 +136,7 @@ export const de: Record<MessageKey, string> = {
   'mail.expandSidebar': 'Seitenleiste ausklappen',
   'mail.from': 'Von',
   'mail.list': 'Nachrichtenliste',
+  'mail.loadRemoteContent': 'Remote-Inhalte laden',
   'mail.markSpam': 'Als Spam markieren',
   'mail.movedToSpam': 'In den Spam-Ordner verschoben',
   'mail.movedToTrash': 'In den Papierkorb verschoben',

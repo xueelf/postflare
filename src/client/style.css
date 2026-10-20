@@ -369,6 +369,35 @@ button.message-identity {
   line-height: 18px;
 }
 
+.message-head-side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.message-remote-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.message-remote-action:hover {
+  text-decoration: underline;
+}
+
+.message-remote-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .correspondent-address {
   min-width: 0;
   overflow: hidden;

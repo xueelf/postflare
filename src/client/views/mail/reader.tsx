@@ -18,6 +18,7 @@ import { Button } from '#/client/components/button';
 import { EmptyState } from '#/client/components/empty-state';
 import { MessageView } from '#/client/components/message-view';
 import { dateTimeValue, formatDate, formatSize } from '#/client/format';
+import { useEmailBody } from '#/client/hooks/use-email-body';
 import type { MessageDetail } from '#/client/hooks/use-messages';
 import { useI18n } from '#/client/i18n';
 import type { View } from '#/client/route';
@@ -51,6 +52,10 @@ export function Reader({
   onPurge,
 }: ReaderProps) {
   const { locale, t } = useI18n();
+  const { emailDocument, allowRemote, allowRemoteContent } = useEmailBody(
+    message?.body_html ?? '',
+    message?.id ?? '',
+  );
 
   if (!message) {
     return (
@@ -167,6 +172,11 @@ export function Reader({
         when={formatDate(message.created_at, locale)}
         dateTime={dateTimeValue(message.created_at)}
         detailsId="message-details"
+        remoteContent={
+          emailDocument.hasRemoteContent && !allowRemote
+            ? allowRemoteContent
+            : undefined
+        }
       >
         <dl id="message-details" popover="auto" className="message-details">
           <dt>{t('mail.from')}</dt>
@@ -182,7 +192,10 @@ export function Reader({
           <ul className="attachments">
             {message.attachments.map(file => (
               <li key={file.id}>
-                <a href={`/api/attachments/${file.id}`}>
+                <a
+                  href={`/api/attachments/${file.id}`}
+                  download={file.filename}
+                >
                   <RiAttachmentLine size={14} aria-hidden />
                   {file.filename}
                 </a>
@@ -192,7 +205,11 @@ export function Reader({
           </ul>
         )}
         {message.body_html ? (
-          <BodyFrame html={message.body_html} title={t('mail.body')} />
+          <BodyFrame
+            key={message.id}
+            srcDoc={emailDocument.html}
+            title={t('mail.body')}
+          />
         ) : (
           <>
             <pre className="body-text">{quote.visible || t('mail.noBody')}</pre>

@@ -16,6 +16,7 @@ import {
   formatDate,
   templateHtml,
 } from '#/client/format';
+import { useEmailBody } from '#/client/hooks/use-email-body';
 import type { Template } from '#/client/hooks/use-templates';
 import { useI18n } from '#/client/i18n';
 
@@ -39,6 +40,10 @@ export function TemplatePreview({
 }: TemplatePreviewProps) {
   const { locale, t } = useI18n();
   const accountName = displayName(user);
+  const { emailDocument, allowRemote, allowRemoteContent } = useEmailBody(
+    template ? templateHtml(template.body_html) : '',
+    template?.id ?? '',
+  );
 
   return (
     <section className="panel reader-pane" aria-label={t('templates.preview')}>
@@ -77,9 +82,15 @@ export function TemplatePreview({
             addr={user.email}
             when={formatDate(template.updated_at, locale)}
             dateTime={dateTimeValue(template.updated_at)}
+            remoteContent={
+              emailDocument.hasRemoteContent && !allowRemote
+                ? allowRemoteContent
+                : undefined
+            }
           >
             <BodyFrame
-              html={templateHtml(template.body_html)}
+              key={template.id}
+              srcDoc={emailDocument.html}
               title={t('templates.body')}
             />
           </MessageView>

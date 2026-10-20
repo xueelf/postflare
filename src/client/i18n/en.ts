@@ -126,6 +126,7 @@ export const en: Record<MessageKey, string> = {
   'mail.expandSidebar': 'Expand sidebar',
   'mail.from': 'From',
   'mail.list': 'Message list',
+  'mail.loadRemoteContent': 'Load remote content',
   'mail.markSpam': 'Mark as spam',
   'mail.movedToSpam': 'Moved to spam',
   'mail.movedToTrash': 'Moved to trash',
