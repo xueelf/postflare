@@ -95,6 +95,7 @@ CREATE TABLE attachments (
   template_id TEXT REFERENCES templates(id) ON DELETE CASCADE,
   filename TEXT NOT NULL,
   content_type TEXT NOT NULL,
+  content_id TEXT,
   size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
   storage_key TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

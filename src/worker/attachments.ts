@@ -23,6 +23,82 @@ export function extractAttachmentIds(html: string): string[] {
   return [...ids];
 }
 
+export interface CidAttachment {
+  id: string;
+  content_id: string | null;
+}
+
+/** 去掉 Content-ID 头可能带上的尖括号 */
+export function normalizeContentId(
+  value: string | null | undefined,
+): string | null {
+  const trimmed = value?.trim().replace(/^</, '').replace(/>$/, '').trim();
+
+  return trimmed || null;
+}
+
+const CID_ATTR_RE = /(\s(?:src|background|href)\s*=\s*)(["'])cid:([^"']+)\2/gi;
+const CID_UNQUOTED_ATTR_RE =
+  /(\s(?:src|background|href)\s*=\s*)cid:([^\s"'>]+)/gi;
+const CID_URL_RE = /url\(\s*(["']?)cid:([^"')]+)\1\s*\)/gi;
+
+/**
+ * 把正文里的 cid: 引用换成附件地址，收件后内联图片才能显示。
+ */
+export function replaceCidImages(
+  html: string,
+  attachments: CidAttachment[],
+): string {
+  if (!html || attachments.length === 0) {
+    return html;
+  }
+
+  const byContentId = new Map<string, string>();
+
+  for (const attachment of attachments) {
+    const contentId = normalizeContentId(attachment.content_id);
+
+    if (contentId) {
+      byContentId.set(contentId, attachment.id);
+    }
+  }
+
+  if (byContentId.size === 0) {
+    return html;
+  }
+
+  const resolve = (raw: string): string => {
+    let contentId = raw;
+
+    try {
+      contentId = decodeURIComponent(raw);
+    } catch {
+      // 保留原值，按未编码的 cid 匹配
+    }
+
+    const id = byContentId.get(normalizeContentId(contentId) ?? '');
+
+    return id ? `/api/attachments/${id}` : `cid:${raw}`;
+  };
+
+  return html
+    .replace(
+      CID_ATTR_RE,
+      (_match, prefix: string, quote: string, contentId: string) =>
+        `${prefix}${quote}${resolve(contentId)}${quote}`,
+    )
+    .replace(
+      CID_UNQUOTED_ATTR_RE,
+      (_match, prefix: string, contentId: string) =>
+        `${prefix}${resolve(contentId)}`,
+    )
+    .replace(
+      CID_URL_RE,
+      (_match, quote: string, contentId: string) =>
+        `url(${quote}${resolve(contentId)}${quote})`,
+    );
+}
+
 export async function getAttachment(
   env: Env,
   id: string,

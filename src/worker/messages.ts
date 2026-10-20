@@ -1,4 +1,8 @@
-import type { AttachmentRow } from './attachments';
+import {
+  type AttachmentRow,
+  extractAttachmentIds,
+  replaceCidImages,
+} from './attachments';
 import { chunks, DB_PARAM_LIMIT, deleteObjects } from './batch';
 import { badRequest, notFound, readJson } from './http';
 
@@ -143,14 +147,31 @@ export async function getMessage(
   }
 
   const { results: attachments } = await env.DB.prepare(
-    `SELECT id, filename, content_type, size_bytes
+    `SELECT id, filename, content_type, content_id, size_bytes
      FROM attachments
      WHERE message_id = ?`,
   )
     .bind(id)
-    .all<AttachmentRow>();
+    .all<AttachmentRow & { content_id: string | null }>();
 
-  return Response.json({ ...message, attachments });
+  const bodyHtml =
+    message.body_html === null
+      ? null
+      : replaceCidImages(message.body_html, attachments);
+
+  // 收件正文用 cid 引用内联图片，发件正文直接引用 /api/attachments，两种都要从附件列表里排除
+  const inlineIds = new Set(extractAttachmentIds(message.body_html ?? ''));
+  const visibleAttachments = attachments.filter(
+    file => !file.content_id && !inlineIds.has(file.id),
+  );
+
+  return Response.json({
+    ...message,
+    body_html: bodyHtml,
+    attachments: visibleAttachments.map(
+      ({ content_id: _contentId, ...file }) => file,
+    ),
+  });
 }
 
 interface DownloadRow {
