@@ -1,5 +1,6 @@
 import PostalMime from 'postal-mime';
 
+import { normalizeContentId } from './attachments';
 import { purgeMessages } from './messages';
 
 // D1 单行上限 2MB，正文超限时按字节截断，完整原文仍在 R2
@@ -70,16 +71,23 @@ export async function handleInbound(
 
       await env.ATTACHMENTS.put(storageKey, content);
 
+      // 普通附件即使带 Content-ID 也不当作内联资源
+      const contentId =
+        attachment.disposition === 'attachment'
+          ? null
+          : normalizeContentId(attachment.contentId);
+
       await env.DB.prepare(
         `INSERT INTO attachments (
-          id, message_id, filename, content_type, size_bytes, storage_key
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
+          id, message_id, filename, content_type, content_id, size_bytes, storage_key
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
         .bind(
           attachmentId,
           id,
           attachment.filename ?? 'attachment',
           attachment.mimeType,
+          contentId,
           content.byteLength,
           storageKey,
         )
