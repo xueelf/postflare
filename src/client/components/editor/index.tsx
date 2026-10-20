@@ -5,6 +5,7 @@ import {
   RiUnderline,
 } from '@remixicon/react';
 import Image from '@tiptap/extension-image';
+import { TableKit } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions/placeholder';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -12,6 +13,8 @@ import { type ReactNode, useEffect, useRef } from 'react';
 
 import { readAsDataUrl } from '#/client/format';
 import { useI18n } from '#/client/i18n';
+
+import { DivBlock, PreservedAttributes, StyleBlock } from './extensions';
 
 import './style.css';
 
@@ -43,8 +46,12 @@ export function Editor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ link: { openOnClick: false } }),
+      TableKit.configure({ table: { resizable: false } }),
       // 允许 data URL，粘贴与导入的图片先本地预览，上传或保存后替换为应用地址
       Image.configure({ allowBase64: true }),
+      PreservedAttributes,
+      StyleBlock,
+      DivBlock,
       Placeholder.configure({ placeholder: t('compose.body') }),
     ],
     content: html,
