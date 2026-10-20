@@ -129,6 +129,7 @@ export const pt: Record<MessageKey, string> = {
   'mail.expandSidebar': 'Expandir barra lateral',
   'mail.from': 'De',
   'mail.list': 'Lista de mensagens',
+  'mail.loadRemoteContent': 'Carregar conteúdo remoto',
   'mail.markSpam': 'Marcar como spam',
   'mail.movedToSpam': 'Movido para spam',
   'mail.movedToTrash': 'Movido para a lixeira',

@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 
+import { useI18n } from '#/client/i18n';
+
 import { Avatar } from './avatar';
 
 export interface MessageViewProps {
@@ -9,6 +11,7 @@ export interface MessageViewProps {
   when: string;
   dateTime: string;
   detailsId?: string;
+  remoteContent?: () => void;
   children: ReactNode;
 }
 
@@ -23,8 +26,10 @@ export function MessageView({
   when,
   dateTime,
   detailsId,
+  remoteContent,
   children,
 }: MessageViewProps) {
+  const { t } = useI18n();
   const identity = (
     <>
       <Avatar name={avatarName} />
@@ -50,9 +55,20 @@ export function MessageView({
         ) : (
           <div className="message-identity">{identity}</div>
         )}
-        <time className="message-when" dateTime={dateTime}>
-          {when}
-        </time>
+        <div className="message-head-side">
+          <time className="message-when" dateTime={dateTime}>
+            {when}
+          </time>
+          {remoteContent && (
+            <button
+              type="button"
+              className="message-remote-action"
+              onClick={remoteContent}
+            >
+              {t('mail.loadRemoteContent')}
+            </button>
+          )}
+        </div>
       </header>
       <div className="message-body">{children}</div>
     </article>
