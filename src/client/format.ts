@@ -73,34 +73,12 @@ export function dateTimeInputValue(date: Date): string {
 }
 
 /**
- * 纯文本转成编辑器 HTML（兼容以纯文本保存的草稿与模板）。
- */
-export function textToHtml(text: string): string {
-  return text
-    .split(/\n{2,}/)
-    .map(
-      paragraph =>
-        `<p>${paragraph
-          .replaceAll('&', '&amp;')
-          .replaceAll('<', '&lt;')
-          .replaceAll('>', '&gt;')
-          .replaceAll('\n', '<br>')}</p>`,
-    )
-    .join('');
-}
-
-/**
- * 模板正文：已是 HTML 的原样返回，纯文本保存的转成 HTML。
- */
-export function templateHtml(body: string): string {
-  return /<[a-z][\s\S]*>/i.test(body) ? body : textToHtml(body);
-}
-
-/**
- * HTML 转纯文本（列表行摘要）。
+ * HTML 转纯文本（列表行摘要）。样式和脚本不进入摘要。
  */
 export function htmlToText(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  doc.querySelectorAll('style, script, title').forEach(node => node.remove());
 
   return (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
 }
@@ -113,7 +91,7 @@ export function displayName(user: { name: string; email: string }): string {
 }
 
 /**
- * 文件或 Blob 转 data URL（图片本地预览）。
+ * 文件或 Blob 转 data URL。
  */
 export function readAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {

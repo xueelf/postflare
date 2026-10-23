@@ -10,12 +10,7 @@ import { BodyFrame } from '#/client/components/body-frame';
 import { Button } from '#/client/components/button';
 import { EmptyState } from '#/client/components/empty-state';
 import { MessageView } from '#/client/components/message-view';
-import {
-  dateTimeValue,
-  displayName,
-  formatDate,
-  templateHtml,
-} from '#/client/format';
+import { dateTimeValue, displayName, formatDate } from '#/client/format';
 import { useEmailBody } from '#/client/hooks/use-email-body';
 import type { Template } from '#/client/hooks/use-templates';
 import { useI18n } from '#/client/i18n';
@@ -41,7 +36,7 @@ export function TemplatePreview({
   const { locale, t } = useI18n();
   const accountName = displayName(user);
   const { emailDocument, allowRemote, allowRemoteContent } = useEmailBody(
-    template ? templateHtml(template.body_html) : '',
+    template?.body_html ?? '',
     template?.id ?? '',
   );
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { Editor } from '#/client/components/editor';
+import { InkyEditor } from '#/client/components/editor/inky';
 import { Modal } from '#/client/components/modal';
 
 import './style.css';
@@ -8,18 +8,24 @@ import './style.css';
 import { Button } from '#/client/components/button';
 import { useI18n } from '#/client/i18n';
 
+export interface ComposeContent {
+  source: string;
+  text: string;
+  html: string;
+}
+
 export interface ComposeProps {
   title: string;
   to: string;
   subject: string;
   text: string;
+  source: string;
   html: string;
   busy: boolean;
   status: string;
   onToChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
-  onHtmlChange: (html: string, text: string) => void;
-  onUploadImage: (file: File, html: string) => Promise<string>;
+  onContentChange: (content: ComposeContent) => void;
   onSend: () => void;
   onDismiss: () => void;
 }
@@ -32,13 +38,13 @@ export function Compose({
   to,
   subject,
   text,
+  source,
   html,
   busy,
   status,
   onToChange,
   onSubjectChange,
-  onHtmlChange,
-  onUploadImage,
+  onContentChange,
   onSend,
   onDismiss,
 }: ComposeProps) {
@@ -64,7 +70,11 @@ export function Compose({
             form="compose-form"
             variant="primary"
             disabled={
-              busy || !to.trim() || (!text.trim() && !html.includes('<img'))
+              busy ||
+              !to.trim() ||
+              (!text.trim() &&
+                !html.includes('<img') &&
+                !source.includes('<image'))
             }
           >
             {busy ? t('compose.sending') : t('compose.send')}
@@ -95,11 +105,7 @@ export function Compose({
           placeholder={t('compose.subject')}
           aria-label={t('compose.subject')}
         />
-        <Editor
-          html={html}
-          onChange={onHtmlChange}
-          onUploadImage={onUploadImage}
-        />
+        <InkyEditor source={source} onChange={onContentChange} />
       </form>
     </Modal>
   );

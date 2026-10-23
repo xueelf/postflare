@@ -6,7 +6,13 @@ const valueStatements = ['const', 'let', 'expression'];
 const controlStatements = ['if', 'for', 'while', 'do', 'switch', 'try'];
 
 export default defineConfig(
-  globalIgnores(['dist/', '.wrangler/', 'types/']),
+  globalIgnores([
+    'dist/',
+    '.wrangler/',
+    'types/',
+    'src/client/inky/inky.js',
+    'src/client/inky/inky.d.ts',
+  ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   {

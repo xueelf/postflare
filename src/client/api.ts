@@ -1,6 +1,3 @@
-// 正文图片大小上限（与 Worker 侧校验保持一致）
-export const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
-
 let onUnauthorized: (() => void) | null = null;
 
 /** 注册 401 处理（认证 Hook 挂载时设置） */
