@@ -1,4 +1,4 @@
-import { getAttachment, uploadAttachment } from './attachments';
+import { getAttachment } from './attachments';
 import {
   type AuthUser,
   authenticate,
@@ -8,20 +8,21 @@ import {
 import { composeMessage, discardDraft, saveDraft } from './compose';
 import { jsonError, methodNotAllowed, notFound } from './http';
 import { handleInbound } from './inbound';
+import { importMessages } from './message-import';
 import {
   downloadMessage,
   emptyMailbox,
   getFolderCounts,
   getMessage,
   listMessages,
-  markMessageRead,
-  moveMessage,
   purgeExpired,
   purgeMessage,
+  updateMessage,
 } from './messages';
 import {
   createTemplate,
   deleteTemplate,
+  importTemplate,
   listTemplates,
   updateTemplate,
 } from './templates';
@@ -35,7 +36,7 @@ import {
 const USERS_PATH = '/api/users/';
 const INVITE_PATH = '/api/invite/';
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 interface RouteContext {
   env: Env;
@@ -113,16 +114,16 @@ const ROUTES: Route[] = [
       getMessage(env, param(params, 'id'), user.id),
   },
   {
+    method: 'PATCH',
+    pattern: '/api/messages/:id',
+    handler: ({ env, params, request, user }) =>
+      updateMessage(env, param(params, 'id'), user.id, request),
+  },
+  {
     method: 'DELETE',
     pattern: '/api/messages/:id',
     handler: ({ env, params, user }) =>
       purgeMessage(env, param(params, 'id'), user.id),
-  },
-  {
-    method: 'POST',
-    pattern: '/api/messages/:id/read',
-    handler: ({ env, params, user }) =>
-      markMessageRead(env, param(params, 'id'), user.id),
   },
   {
     method: 'GET',
@@ -131,19 +132,13 @@ const ROUTES: Route[] = [
       downloadMessage(env, param(params, 'id'), user.id),
   },
   {
-    method: 'POST',
-    pattern: '/api/messages/:id/mailbox',
-    handler: ({ env, params, request, user }) =>
-      moveMessage(env, param(params, 'id'), user.id, request),
-  },
-  {
     method: 'GET',
     pattern: '/api/counts',
     handler: ({ env, user }) => getFolderCounts(env, user.id),
   },
   {
     method: 'POST',
-    pattern: '/api/compose',
+    pattern: '/api/messages',
     handler: ({ env, request, user }) => composeMessage(env, user, request),
   },
   {
@@ -152,16 +147,21 @@ const ROUTES: Route[] = [
     handler: ({ env, request, user }) => saveDraft(env, user, request),
   },
   {
+    method: 'POST',
+    pattern: '/api/messages/import',
+    handler: ({ env, request, user }) => importMessages(env, user, request),
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/drafts/:id',
+    handler: ({ env, params, request, user }) =>
+      saveDraft(env, user, request, param(params, 'id')),
+  },
+  {
     method: 'DELETE',
     pattern: '/api/drafts/:id',
     handler: ({ env, params, user }) =>
       discardDraft(env, param(params, 'id'), user.id),
-  },
-  {
-    method: 'POST',
-    pattern: '/api/attachments',
-    handler: ({ env, request, user }) =>
-      uploadAttachment(env, request, user.id),
   },
   {
     method: 'GET',
@@ -178,6 +178,11 @@ const ROUTES: Route[] = [
     method: 'POST',
     pattern: '/api/templates',
     handler: ({ env, request, user }) => createTemplate(env, request, user.id),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/templates/import',
+    handler: ({ env, request, user }) => importTemplate(env, request, user.id),
   },
   {
     method: 'PUT',
@@ -222,7 +227,7 @@ export default {
       return handleUsers(env, pathname, request, user);
     }
 
-    let pathMatched = false;
+    const allowed = new Set<string>();
 
     for (const route of ROUTES) {
       const params = matchPath(route.pattern, pathname);
@@ -230,14 +235,14 @@ export default {
       if (!params) {
         continue;
       }
-      pathMatched = true;
+      allowed.add(route.method);
 
       if (route.method === request.method) {
         return route.handler({ env, request, url, params, user });
       }
     }
 
-    return pathMatched ? methodNotAllowed() : notFound();
+    return allowed.size > 0 ? methodNotAllowed([...allowed]) : notFound();
   },
 
   async email(message: ForwardableEmailMessage, env: Env): Promise<void> {

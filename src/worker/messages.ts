@@ -124,6 +124,7 @@ interface MessageRow {
   subject: string;
   body_text: string | null;
   body_html: string | null;
+  body_source: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -135,7 +136,7 @@ export async function getMessage(
 ): Promise<Response> {
   const message = await env.DB.prepare(
     `SELECT id, mailbox, direction, seen, from_address, from_name, to_address, subject,
-            body_text, body_html, created_at, updated_at
+            body_text, body_html, body_source, created_at, updated_at
      FROM messages
      WHERE id = ? AND user_id = ?`,
   )
@@ -319,49 +320,57 @@ export async function downloadMessage(
   );
 }
 
-export async function markMessageRead(
-  env: Env,
-  id: string,
-  userId: string,
-): Promise<Response> {
-  const updated = await env.DB.prepare(
-    'UPDATE messages SET seen = 1 WHERE id = ? AND user_id = ?',
-  )
-    .bind(id, userId)
-    .run();
-
-  if (updated.meta.changes === 0) {
-    return notFound();
-  }
-
-  return Response.json({ ok: true });
-}
-
-export async function moveMessage(
+export async function updateMessage(
   env: Env,
   id: string,
   userId: string,
   request: Request,
 ): Promise<Response> {
-  const payload = await readJson<{ mailbox?: unknown }>(request);
+  const payload = await readJson<{ seen?: unknown; mailbox?: unknown }>(
+    request,
+  );
 
   if (payload instanceof Response) {
     return payload;
   }
-  const mailbox = typeof payload.mailbox === 'string' ? payload.mailbox : '';
+  const seen = payload.seen;
+  const mailbox = payload.mailbox;
 
-  if (!MOVE_TARGETS.includes(mailbox)) {
+  if (seen === undefined && mailbox === undefined) {
+    return badRequest('no message fields');
+  }
+
+  if (seen !== undefined && typeof seen !== 'boolean') {
+    return badRequest('invalid seen');
+  }
+
+  if (
+    mailbox !== undefined &&
+    (typeof mailbox !== 'string' || !MOVE_TARGETS.includes(mailbox))
+  ) {
     return badRequest('invalid mailbox');
   }
 
-  const moved = await env.DB.prepare(
-    `UPDATE messages SET mailbox = ?, updated_at = datetime('now')
-     WHERE id = ? AND user_id = ?`,
+  const fields: string[] = [];
+  const values: Array<string | number> = [];
+
+  if (seen !== undefined) {
+    fields.push('seen = ?');
+    values.push(seen ? 1 : 0);
+  }
+
+  if (mailbox !== undefined) {
+    fields.push('mailbox = ?', "updated_at = datetime('now')");
+    values.push(mailbox);
+  }
+
+  const updated = await env.DB.prepare(
+    `UPDATE messages SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`,
   )
-    .bind(mailbox, id, userId)
+    .bind(...values, id, userId)
     .run();
 
-  if (moved.meta.changes === 0) {
+  if (updated.meta.changes === 0) {
     return notFound();
   }
 

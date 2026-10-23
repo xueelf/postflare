@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
-import { apiFetch, IMAGE_MAX_BYTES } from '#/client/api';
+import { apiFetch } from '#/client/api';
 import { useToast } from '#/client/components/toast';
-import { dateTimeValue, formatTime, textToHtml } from '#/client/format';
+import { dateTimeValue, formatTime } from '#/client/format';
 import { type MessageKey, useI18n } from '#/client/i18n';
+import { compileInky } from '#/client/inky';
 import { type MailRoute, viewPath } from '#/client/route';
 
 import type { MessageDetail } from './use-messages';
@@ -16,6 +17,7 @@ const COMPOSE_ERRORS: Record<string, MessageKey> = {
   'invalid recipient': 'compose.errorRecipient',
   'too many recipients': 'compose.errorTooManyRecipients',
   'message text is empty': 'compose.errorEmpty',
+  'message source is empty': 'compose.errorEmpty',
   'draft is empty': 'compose.errorDraftEmpty',
   'message too large': 'compose.errorTooLarge',
   'subject too long': 'compose.errorSubjectTooLong',
@@ -25,7 +27,7 @@ interface ComposeSnapshot {
   to: string;
   subject: string;
   text: string;
-  html: string;
+  source: string;
 }
 
 export interface ComposeDeps {
@@ -37,7 +39,7 @@ export interface ComposeDeps {
 }
 
 /**
- * 写信弹窗：内容状态、草稿自动保存、发送与正文图片上传。
+ * 写信弹窗：内容状态、草稿自动保存与发送。
  */
 export function useCompose(route: MailRoute, deps: ComposeDeps) {
   const { navigate, closeDrawer, openMessage, refreshList, refreshCounts } =
@@ -51,6 +53,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeText, setComposeText] = useState('');
+  const [composeSource, setComposeSource] = useState('');
   const [composeHtml, setComposeHtml] = useState('');
   const [composeBusy, setComposeBusy] = useState(false);
   const toast = useToast();
@@ -61,6 +64,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
   );
   const [savedAt, setSavedAt] = useState('');
   const [draftError, setDraftError] = useState('');
+  const contentRef = useRef({ source: '', text: '', html: '' });
   const draftSaveRef = useRef<Promise<string | null> | null>(null);
   const loadedDraftRef = useRef<string | null>(null);
 
@@ -70,12 +74,14 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
     composeTo === savedCompose.to &&
     composeSubject === savedCompose.subject &&
     composeText === savedCompose.text &&
-    composeHtml === savedCompose.html;
+    composeSource === savedCompose.source;
 
   const composeEmpty =
     !composeTo.trim() &&
     !composeSubject.trim() &&
     !composeText.trim() &&
+    !composeSource.includes('<image') &&
+    !composeSource.includes('<img') &&
     !composeHtml.includes('<img');
 
   // 底部状态：保存失败 / 正在保存 / 已保存（含时间）
@@ -93,7 +99,10 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
     setComposeTo('');
     setComposeSubject('');
     setComposeText('');
+    setComposeSource('');
     setComposeHtml('');
+
+    contentRef.current = { source: '', text: '', html: '' };
     setDraftId(null);
     setSavedCompose(null);
     setSavedAt('');
@@ -114,20 +123,27 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
 
     loadedDraftRef.current = openMessage.id;
 
-    const draftHtml =
-      openMessage.body_html ?? textToHtml(openMessage.body_text ?? '');
+    const draftSource = openMessage.body_source ?? '';
+    const draftHtml = openMessage.body_html ?? '';
 
     setDraftId(openMessage.id);
     setComposeTo(openMessage.to_address);
     setComposeSubject(openMessage.subject);
     setComposeText(openMessage.body_text ?? '');
+    setComposeSource(draftSource);
     setComposeHtml(draftHtml);
+
+    contentRef.current = {
+      source: draftSource,
+      text: openMessage.body_text ?? '',
+      html: draftHtml,
+    };
 
     setSavedCompose({
       to: openMessage.to_address,
       subject: openMessage.subject,
       text: openMessage.body_text ?? '',
-      html: draftHtml,
+      source: draftSource,
     });
 
     setSavedAt(
@@ -152,46 +168,74 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
     });
   };
 
-  const saveDraft = (htmlOverride?: string): Promise<string | null> => {
+  const updateComposeContent = (content: {
+    source: string;
+    text: string;
+    html: string;
+  }) => {
+    contentRef.current = content;
+    setComposeSource(content.source);
+    setComposeText(content.text);
+    setComposeHtml(content.html);
+  };
+
+  const saveDraft = (): Promise<string | null> => {
     // 已有保存在进行中时直接复用它，避免并发保存拿不到草稿 id
     if (draftSaveRef.current) {
       return draftSaveRef.current;
     }
-    const snapshot = {
+    const content = contentRef.current;
+    const snapshot: ComposeSnapshot = {
       to: composeTo,
       subject: composeSubject,
-      text: composeText,
-      html: htmlOverride ?? composeHtml,
+      text: content.text,
+      source: content.source,
     };
 
     setDraftBusy(true);
     setDraftError('');
 
-    draftSaveRef.current = apiFetch('/api/drafts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: draftId, ...snapshot }),
-    })
-      .then(async res => {
-        if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
+    const run = (async () => {
+      let html = content.html;
 
-          setDraftError(composeError(data.error, 'compose.saveFailed'));
-          setDraftBusy(false);
+      if (content.source.trim()) {
+        html = (await compileInky(content.source)).html;
+      }
 
-          return null;
-        }
-        const data = (await res.json()) as { id: string };
+      const res = await apiFetch(
+        draftId ? `/api/drafts/${draftId}` : '/api/drafts',
+        {
+          method: draftId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: snapshot.to,
+            subject: snapshot.subject,
+            text: snapshot.text,
+            source: snapshot.source,
+            html,
+          }),
+        },
+      );
 
-        setDraftId(data.id);
-        setSavedCompose(snapshot);
-        setSavedAt(formatTime(new Date(), locale));
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+
+        setDraftError(composeError(data.error, 'compose.saveFailed'));
         setDraftBusy(false);
-        refreshList();
-        refreshCounts();
 
-        return data.id;
-      })
+        return null;
+      }
+      const data = (await res.json()) as { id: string };
+
+      setDraftId(data.id);
+      setSavedCompose(snapshot);
+      setSavedAt(formatTime(new Date(), locale));
+      setDraftBusy(false);
+      refreshList();
+      refreshCounts();
+
+      return data.id;
+    })()
       .catch(() => {
         setDraftError(t('compose.saveFailed'));
         setDraftBusy(false);
@@ -202,45 +246,9 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
         draftSaveRef.current = null;
       });
 
-    return draftSaveRef.current;
-  };
+    draftSaveRef.current = run;
 
-  // 正文内联图片：先确保草稿存在，再上传到 R2 并返回应用地址
-  const uploadImage = async (file: File, html: string): Promise<string> => {
-    if (file.size > IMAGE_MAX_BYTES) {
-      toast.error(t('compose.imageTooLarge'));
-
-      throw new Error('file too large');
-    }
-    let id = draftId;
-
-    if (!id) {
-      id = await saveDraft(html);
-    }
-
-    if (!id) {
-      toast.error(t('compose.imageUploadFailed'));
-
-      throw new Error('draft not saved');
-    }
-    const form = new FormData();
-
-    form.append('file', file);
-    form.append('messageId', id);
-
-    const res = await apiFetch('/api/attachments', {
-      method: 'POST',
-      body: form,
-    }).catch(() => null);
-
-    if (!res || !res.ok) {
-      toast.error(t('compose.imageUploadFailed'));
-
-      throw new Error('upload failed');
-    }
-    const data = (await res.json()) as { id: string };
-
-    return `/api/attachments/${data.id}`;
+    return run;
   };
 
   // 关闭写信前把未保存的内容立即落草稿
@@ -256,7 +264,7 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
 
   saveDraftRef.current = saveDraft;
 
-  // 自动保存：输入停止后保存草稿（html 与 text 同源，html 是超集信号）
+  // 自动保存：输入停止后保存草稿（源码是最终内容，编译结果只用于展示）
   useEffect(() => {
     if (!route.compose || composeBusy || draftSaved || composeEmpty) {
       return;
@@ -272,45 +280,56 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
     composeEmpty,
     composeTo,
     composeSubject,
-    composeHtml,
+    composeSource,
   ]);
 
-  const sendCompose = () => {
+  const sendCompose = async () => {
     setComposeBusy(true);
 
-    apiFetch('/api/compose', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: composeTo,
-        subject: composeSubject,
-        text: composeText,
-        html: composeHtml,
-        draftId: draftId ?? undefined,
-      }),
-    })
-      .then(async res => {
-        if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
-
-          toast.error(composeError(data.error, 'compose.sendFailed'));
-          setComposeBusy(false);
-
-          return;
-        }
-        const data = (await res.json()) as { id: string };
-
-        toast.success(t('compose.sent'));
-        resetCompose();
+    try {
+      if (!composeSource.trim()) {
+        toast.error(t('compose.errorEmpty'));
         setComposeBusy(false);
-        refreshList();
-        refreshCounts();
-        navigate(`/sent/${data.id}`);
-      })
-      .catch(() => {
-        toast.error(t('compose.sendFailed'));
-        setComposeBusy(false);
+
+        return;
+      }
+      const compiled = await compileInky(composeSource);
+      const html = compiled.html;
+      const text = compiled.text;
+
+      const res = await apiFetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: composeTo,
+          subject: composeSubject,
+          text,
+          source: composeSource,
+          html,
+          draftId: draftId ?? undefined,
+        }),
       });
+
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+
+        toast.error(composeError(data.error, 'compose.sendFailed'));
+        setComposeBusy(false);
+
+        return;
+      }
+      const data = (await res.json()) as { id: string };
+
+      toast.success(t('compose.sent'));
+      resetCompose();
+      setComposeBusy(false);
+      refreshList();
+      refreshCounts();
+      navigate(`/sent/${data.id}`);
+    } catch {
+      toast.error(t('compose.sendFailed'));
+      setComposeBusy(false);
+    }
   };
 
   return {
@@ -320,15 +339,14 @@ export function useCompose(route: MailRoute, deps: ComposeDeps) {
     composeSubject,
     setComposeSubject,
     composeText,
-    setComposeText,
+    composeSource,
     composeHtml,
-    setComposeHtml,
     composeBusy,
     composeStatus,
     openCompose,
     resetCompose,
     flushDraft,
-    uploadImage,
+    updateComposeContent,
     sendCompose,
   };
 }

@@ -13,8 +13,14 @@ export function notFound(): Response {
   return jsonError('not found', 404);
 }
 
-export function methodNotAllowed(): Response {
-  return jsonError('method not allowed', 405);
+export function methodNotAllowed(allowed: string[] = []): Response {
+  return Response.json(
+    { error: 'method not allowed' },
+    {
+      status: 405,
+      headers: allowed.length > 0 ? { Allow: allowed.join(', ') } : {},
+    },
+  );
 }
 
 /**
