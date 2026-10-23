@@ -109,10 +109,12 @@ export function Modal({
           return;
         }
         event.preventDefault();
+        event.stopPropagation();
         onDismiss?.();
       }}
       onCancel={event => {
         event.preventDefault();
+        event.stopPropagation();
         onDismiss?.();
       }}
       onClick={event => {

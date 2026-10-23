@@ -128,6 +128,11 @@ export function buildEmailDocument(
     node.setAttribute('rel', 'noopener noreferrer');
   });
 
+  // 与 Zero 一致：删除 1x1 和 0x0 追踪像素，避免允许远程内容后回传已读
+  doc
+    .querySelectorAll('img[width="1"][height="1"], img[width="0"][height="0"]')
+    .forEach(node => node.remove());
+
   const hasRemoteContent = detectRemoteContent(doc);
 
   const csp = doc.createElement('meta');
