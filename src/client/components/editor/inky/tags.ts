@@ -1,0 +1,31 @@
+/**
+ * Inky 组件标签。源码编辑器的补全与可视化模式的原始块解析共用这份列表。
+ */
+export const INKY_TAGS = [
+  'container',
+  'row',
+  'columns',
+  'wrapper',
+  'block-grid',
+  'button',
+  'spacer',
+  'divider',
+  'callout',
+  'menu',
+  'item',
+  'image',
+  'raw',
+  'video',
+  'hero',
+  'social',
+  'social-link',
+  'card',
+  'alert',
+  'badge',
+  'accordion',
+  'accordion-item',
+  'blockquote',
+  'outlook',
+  'not-outlook',
+  'preview',
+] as const;

@@ -1,2 +1,5 @@
 # 由 wrangler types 生成
 /types
+# Inky Web WASM 生成文件
+/src/client/inky/inky.js
+/src/client/inky/inky.d.ts

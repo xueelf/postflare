@@ -1,7 +1,7 @@
 import { RiFileUploadLine } from '@remixicon/react';
 import { useEffect, useRef } from 'react';
 
-import { Editor } from '#/client/components/editor';
+import { InkyEditor } from '#/client/components/editor/inky';
 import { Modal } from '#/client/components/modal';
 import type { TemplateDraft } from '#/client/hooks/use-templates';
 import { useI18n } from '#/client/i18n';
@@ -38,11 +38,39 @@ export function TemplateDialog({
     nameRef.current?.focus();
   }, []);
 
+  const toolbarEnd = (
+    <>
+      <Button
+        variant="icon"
+        className="template-import"
+        aria-label={t('templates.importTemplate')}
+        title={t('templates.importTemplate')}
+        onClick={() => fileRef.current?.click()}
+      >
+        <RiFileUploadLine size={20} aria-hidden />
+      </Button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".inky"
+        hidden
+        onChange={event => {
+          const file = event.target.files?.[0];
+
+          // 清空 value，同一个文件可以再次选择
+          event.target.value = '';
+
+          if (file) {
+            onImportFile(file);
+          }
+        }}
+      />
+    </>
+  );
+
   return (
     <Modal
-      title={
-        draft.id ? t('templates.editTemplate') : t('templates.newTemplate')
-      }
+      title={t('templates.editTemplate')}
       size="lg"
       onDismiss={onDismiss}
       footer={
@@ -72,38 +100,16 @@ export function TemplateDialog({
           placeholder={t('templates.name')}
           aria-label={t('templates.name')}
         />
-        <Editor
-          html={draft.body_html}
-          onChange={html => onChange({ ...draft, body_html: html })}
-          toolbarEnd={
-            <>
-              <Button
-                variant="icon"
-                className="template-import"
-                aria-label={t('templates.importTemplate')}
-                title={t('templates.importTemplate')}
-                onClick={() => fileRef.current?.click()}
-              >
-                <RiFileUploadLine size={20} aria-hidden />
-              </Button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".eml"
-                hidden
-                onChange={event => {
-                  const file = event.target.files?.[0];
-
-                  // 清空 value，同一个文件可以再次选择
-                  event.target.value = '';
-
-                  if (file) {
-                    onImportFile(file);
-                  }
-                }}
-              />
-            </>
+        <InkyEditor
+          source={draft.body_source}
+          onChange={content =>
+            onChange({
+              ...draft,
+              body_source: content.source,
+              body_html: content.html,
+            })
           }
+          toolbarEnd={toolbarEnd}
         />
       </form>
     </Modal>

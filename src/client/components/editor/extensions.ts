@@ -1,6 +1,6 @@
-import { Extension, mergeAttributes, Node } from '@tiptap/core';
+import { Extension, Node } from '@tiptap/core';
 
-// 邮件 HTML 常用但 ProseMirror 默认丢弃的结构，保留后才能做到导入原样保存
+// 邮件正文常用但 ProseMirror 默认丢弃的结构，保留后才能做到导入原样保存
 const PRESERVED_TYPES = [
   'paragraph',
   'heading',
@@ -10,12 +10,6 @@ const PRESERVED_TYPES = [
   'listItem',
   'codeBlock',
   'horizontalRule',
-  'table',
-  'tableRow',
-  'tableCell',
-  'tableHeader',
-  'image',
-  'divBlock',
   'textStyle',
   'link',
   'bold',
@@ -73,21 +67,5 @@ export const StyleBlock = Node.create({
   },
   renderHTML({ node }) {
     return ['style', {}, node.attrs.css];
-  },
-});
-
-/**
- * 邮件外层常用 div 包裹内容，按块级容器保留。
- */
-export const DivBlock = Node.create({
-  name: 'divBlock',
-  group: 'block',
-  content: 'block+',
-  defining: true,
-  parseHTML() {
-    return [{ tag: 'div' }];
-  },
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes), 0];
   },
 });
