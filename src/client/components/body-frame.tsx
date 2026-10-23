@@ -22,34 +22,42 @@ export function BodyFrame({ srcDoc, title }: BodyFrameProps) {
     let observer: ResizeObserver | null = null;
 
     const fit = () => {
-      const doc = frame.contentDocument;
-
-      if (doc) {
-        // 先归零再量，否则上一次的高度会把 scrollHeight 顶大，高度只增不减
-        frame.style.height = '0px';
-
-        const height = Math.max(
-          doc.documentElement.scrollHeight,
-          doc.body?.scrollHeight ?? 0,
-        );
-
-        frame.style.height = `${height}px`;
+      // 切换邮件或卸载时 iframe 文档可能已经销毁
+      if (!frame.isConnected) {
+        return;
       }
+      const doc = frame.contentDocument;
+      const root = doc?.documentElement;
+
+      if (!doc || !root) {
+        return;
+      }
+      // 先归零再量，否则上一次的高度会把 scrollHeight 顶大，高度只增不减
+      frame.style.height = '0px';
+
+      const height = Math.max(root.scrollHeight, doc.body?.scrollHeight ?? 0);
+
+      frame.style.height = `${height}px`;
     };
     const attach = () => {
       fit();
       observer?.disconnect();
 
+      if (!frame.isConnected) {
+        return;
+      }
       const doc = frame.contentDocument;
+      const root = doc?.documentElement;
 
-      if (doc) {
-        observer = new ResizeObserver(fit);
-        // documentElement 的高度是 iframe 视口，不会随内容增长，body 才会
-        observer.observe(doc.documentElement);
+      if (!doc || !root) {
+        return;
+      }
+      observer = new ResizeObserver(fit);
+      // documentElement 的高度是 iframe 视口，不会随内容增长，body 才会
+      observer.observe(root);
 
-        if (doc.body) {
-          observer.observe(doc.body);
-        }
+      if (doc.body) {
+        observer.observe(doc.body);
       }
     };
 
