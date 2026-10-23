@@ -2,7 +2,7 @@ import { ATTACHMENT_URL_RE, extractAttachmentIds } from './attachments';
 import type { AuthUser } from './auth';
 import { chunks, DB_PARAM_LIMIT } from './batch';
 import { badRequest, notFound, readJson } from './http';
-import { BODY_MAX_BYTES, normalizeMessageId } from './inbound';
+import { BODY_MAX_BYTES, normalizeMessageId } from './mail-store';
 import { purgeMessages } from './messages';
 
 const RECIPIENT_PATTERN = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
@@ -48,6 +48,7 @@ export async function composeMessage(
     subject?: unknown;
     text?: unknown;
     html?: unknown;
+    source?: unknown;
     draftId?: unknown;
   }>(request);
 
@@ -59,9 +60,14 @@ export async function composeMessage(
     typeof payload.subject === 'string' ? payload.subject.trim() : '';
   const text = typeof payload.text === 'string' ? payload.text.trim() : '';
   const html = typeof payload.html === 'string' ? payload.html : '';
+  const source = typeof payload.source === 'string' ? payload.source : '';
 
   if (!validRecipients(to)) {
     return badRequest('invalid recipient');
+  }
+
+  if (!source.trim()) {
+    return badRequest('message source is empty');
   }
 
   if (parseRecipients(to).length > MAX_RECIPIENTS) {
@@ -136,8 +142,9 @@ export async function composeMessage(
 
   await env.DB.prepare(
     `INSERT INTO messages (
-       id, user_id, mailbox, direction, seen, from_address, to_address, subject, body_text, body_html, message_id
-     ) VALUES (?, ?, 'sent', 'outbound', 1, ?, ?, ?, ?, ?, ?)`,
+       id, user_id, mailbox, direction, seen, from_address, to_address, subject,
+       body_text, body_html, body_source, message_id
+     ) VALUES (?, ?, 'sent', 'outbound', 1, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -147,6 +154,7 @@ export async function composeMessage(
       cleanSubject,
       text,
       html,
+      source,
       normalizeMessageId(result.messageId),
     )
     .run();
@@ -177,20 +185,24 @@ export async function composeMessage(
     }
   }
 
-  return Response.json({ id });
+  return Response.json(
+    { id },
+    { status: 201, headers: { Location: `/api/messages/${id}` } },
+  );
 }
 
 export async function saveDraft(
   env: Env,
   user: AuthUser,
   request: Request,
+  id?: string,
 ): Promise<Response> {
   const payload = await readJson<{
-    id?: unknown;
     to?: unknown;
     subject?: unknown;
     text?: unknown;
     html?: unknown;
+    source?: unknown;
   }>(request);
 
   if (payload instanceof Response) {
@@ -201,8 +213,16 @@ export async function saveDraft(
     typeof payload.subject === 'string' ? payload.subject.trim() : '';
   const text = typeof payload.text === 'string' ? payload.text.trim() : '';
   const html = typeof payload.html === 'string' ? payload.html : '';
+  const source = typeof payload.source === 'string' ? payload.source : '';
 
-  if (!to && !subject && !text && !html.includes('<img')) {
+  if (
+    !to &&
+    !subject &&
+    !text &&
+    !html.includes('<img') &&
+    !source.includes('<image') &&
+    !source.includes('<img')
+  ) {
     return badRequest('draft is empty');
   }
 
@@ -218,31 +238,38 @@ export async function saveDraft(
     return badRequest('subject too long');
   }
 
-  const id =
-    typeof payload.id === 'string' && payload.id
-      ? payload.id
-      : crypto.randomUUID();
-  // 归属写进 upsert 条件，命中的是别人的邮件或不是草稿时既不改也不新建
-  const saved = await env.DB.prepare(
-    `INSERT INTO messages (
-       id, user_id, mailbox, direction, from_address, to_address, subject, body_text, body_html
-     ) VALUES (?, ?, 'drafts', 'outbound', ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       to_address = excluded.to_address,
-       subject = excluded.subject,
-       body_text = excluded.body_text,
-       body_html = excluded.body_html,
-       updated_at = datetime('now')
-     WHERE messages.user_id = excluded.user_id AND messages.mailbox = 'drafts'`,
-  )
-    .bind(id, user.id, user.email, to, subject, text, html)
-    .run();
+  if (id) {
+    const saved = await env.DB.prepare(
+      `UPDATE messages
+       SET to_address = ?, subject = ?, body_text = ?, body_html = ?,
+           body_source = ?, updated_at = datetime('now')
+       WHERE id = ? AND user_id = ? AND mailbox = 'drafts'`,
+    )
+      .bind(to, subject, text, html, source, id, user.id)
+      .run();
 
-  if (saved.meta.changes === 0) {
-    return notFound();
+    if (saved.meta.changes === 0) {
+      return notFound();
+    }
+
+    return Response.json({ id });
   }
 
-  return Response.json({ id });
+  const draftId = crypto.randomUUID();
+
+  await env.DB.prepare(
+    `INSERT INTO messages (
+       id, user_id, mailbox, direction, from_address, to_address, subject,
+       body_text, body_html, body_source
+     ) VALUES (?, ?, 'drafts', 'outbound', ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(draftId, user.id, user.email, to, subject, text, html, source)
+    .run();
+
+  return Response.json(
+    { id: draftId },
+    { status: 201, headers: { Location: `/api/drafts/${draftId}` } },
+  );
 }
 
 export async function discardDraft(

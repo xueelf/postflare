@@ -68,7 +68,9 @@ export async function handleUsers(
   }
 
   if (pathname === '/api/users') {
-    return request.method === 'GET' ? listUsers(env) : methodNotAllowed();
+    return request.method === 'GET'
+      ? listUsers(env)
+      : methodNotAllowed(['GET']);
   }
 
   if (!pathname.startsWith(USERS_PATH)) {
@@ -88,7 +90,7 @@ export async function handleUsers(
   if (request.method === 'DELETE') {
     return deleteUser(env, rest, actor);
   }
-  return methodNotAllowed();
+  return methodNotAllowed(['PATCH', 'DELETE']);
 }
 
 async function listUsers(env: Env): Promise<Response> {
@@ -234,7 +236,7 @@ async function issueLink(
   request: Request,
 ): Promise<Response> {
   if (request.method !== 'POST') {
-    return methodNotAllowed();
+    return methodNotAllowed(['POST']);
   }
 
   const target = await env.DB.prepare(
@@ -340,7 +342,7 @@ export async function handleInvite(
   }
 
   if (request.method !== 'POST') {
-    return methodNotAllowed();
+    return methodNotAllowed(['GET', 'POST']);
   }
 
   const payload = await readJson<{

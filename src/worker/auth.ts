@@ -79,29 +79,31 @@ export async function handleAuth(
     case '/api/auth':
       return request.method === 'GET'
         ? authState(env, request)
-        : methodNotAllowed();
+        : methodNotAllowed(['GET']);
     case '/api/auth/domain':
-      return request.method === 'GET' ? setupDomain(env) : methodNotAllowed();
+      return request.method === 'GET'
+        ? setupDomain(env)
+        : methodNotAllowed(['GET']);
     case '/api/auth/setup':
       return request.method === 'POST'
         ? setup(env, request)
-        : methodNotAllowed();
+        : methodNotAllowed(['POST']);
     case '/api/auth/login':
       return request.method === 'POST'
         ? login(env, request)
-        : methodNotAllowed();
+        : methodNotAllowed(['POST']);
     case '/api/auth/logout':
       return request.method === 'POST'
         ? logout(env, request)
-        : methodNotAllowed();
+        : methodNotAllowed(['POST']);
     case '/api/auth/password':
       return request.method === 'POST'
         ? changePassword(env, request)
-        : methodNotAllowed();
+        : methodNotAllowed(['POST']);
     case '/api/auth/profile':
       return request.method === 'POST'
         ? updateProfile(env, request)
-        : methodNotAllowed();
+        : methodNotAllowed(['POST']);
     default:
       return notFound();
   }
