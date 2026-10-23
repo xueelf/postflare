@@ -1,0 +1,104 @@
+.inky-source {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 240px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+}
+
+.inky-source:focus-within {
+  border-color: var(--accent);
+}
+
+.inky-source .cm-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.inky-source .cm-scroller {
+  overflow: auto;
+}
+
+.inky-link-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inky-link-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inky-link-field span {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.inky-link-field input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.inky-link-field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.inky-table-dialog {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.inky-table-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inky-table-field span {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.inky-table-field input {
+  width: 88px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+}
+
+.inky-table-field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.inky-frame {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.inky-frame[hidden] {
+  display: none;
+}
+
+.inky-frame:focus-within {
+  border-color: var(--accent);
+}
