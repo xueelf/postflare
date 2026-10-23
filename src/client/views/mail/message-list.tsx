@@ -24,7 +24,8 @@ export interface MessageListProps {
   onToggleSidebar: () => void;
   onMenu: () => void;
   user: { name: string; email: string };
-  onCreateTemplate: () => void;
+  onImportEmail: (files: File[]) => void;
+  onImportTemplate: (files: File[]) => void;
   onLogout: () => void;
 }
 
@@ -57,7 +58,8 @@ export function MessageList({
   onToggleSidebar,
   onMenu,
   user,
-  onCreateTemplate,
+  onImportEmail,
+  onImportTemplate,
   onLogout,
 }: MessageListProps) {
   const { locale, t } = useI18n();
@@ -98,7 +100,8 @@ export function MessageList({
         searchPlaceholder={t('mail.search')}
         accountMenuId="account-menu-mobile"
         user={user}
-        onCreateTemplate={onCreateTemplate}
+        onImportEmail={onImportEmail}
+        onImportTemplate={onImportTemplate}
         onLogout={onLogout}
       />
       {messages.length === 0 ? (

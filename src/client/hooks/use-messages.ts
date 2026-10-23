@@ -45,6 +45,7 @@ export interface AttachmentInfo {
 export interface MessageDetail extends MessageSummary {
   body_text: string | null;
   body_html: string | null;
+  body_source: string | null;
   attachments: AttachmentInfo[];
 }
 
@@ -211,7 +212,11 @@ export function useMessages(
         setOpenMessage(data);
 
         if ((view === 'inbox' || view === 'spam') && data.seen === 0) {
-          apiFetch(`/api/messages/${messageId}/read`, { method: 'POST' })
+          apiFetch(`/api/messages/${messageId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seen: true }),
+          })
             .then(res => {
               // fetch 不会因 HTTP 错误 reject，失败时不改本地状态与计数
               if (!res.ok) {
@@ -276,8 +281,8 @@ export function useMessages(
   ) => {
     const next = neighborId(id);
 
-    apiFetch(`/api/messages/${id}/mailbox`, {
-      method: 'POST',
+    apiFetch(`/api/messages/${id}`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mailbox }),
     })
@@ -321,6 +326,48 @@ export function useMessages(
       })
       .catch(() => {
         toast.error(t('mail.actionFailedRetry'));
+      });
+  };
+
+  const importMessages = (files: File[]) => {
+    const form = new FormData();
+
+    for (const file of files) {
+      form.append('files', file);
+    }
+
+    apiFetch('/api/messages/import', { method: 'POST', body: form })
+      .then(async res => {
+        if (!res.ok) {
+          throw new Error('import failed');
+        }
+        const data = (await res.json()) as {
+          imported: number;
+          skipped: number;
+          failed: number;
+        };
+
+        if (data.imported === 0) {
+          toast.error(t('mail.importFailed'));
+
+          return;
+        }
+
+        if (data.failed > 0) {
+          toast.info(
+            t('mail.importPartial', {
+              imported: data.imported,
+              failed: data.failed,
+            }),
+          );
+        } else {
+          toast.success(t('mail.imported', { count: data.imported }));
+        }
+        refreshList();
+        refreshCounts();
+      })
+      .catch(() => {
+        toast.error(t('mail.importFailed'));
       });
   };
 
@@ -400,6 +447,7 @@ export function useMessages(
     refreshList,
     discardDraft,
     downloadMessage,
+    importMessages,
     moveMessage,
     purgeMessage,
     emptyMailbox,
