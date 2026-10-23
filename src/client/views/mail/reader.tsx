@@ -5,6 +5,7 @@ import {
   RiDeleteBinLine,
   RiDownloadLine,
   RiEditLine,
+  RiFileTextLine,
   RiInboxLine,
   RiInboxUnarchiveLine,
   RiMailForbidLine,
@@ -32,6 +33,7 @@ export interface ReaderProps {
   onCompose: () => void;
   onDiscard: () => void;
   onDownload: () => void;
+  onSaveTemplate: () => void;
   onMove: (mailbox: 'inbox' | 'sent' | 'spam' | 'trash') => void;
   onPurge: () => void;
 }
@@ -48,6 +50,7 @@ export function Reader({
   onCompose,
   onDiscard,
   onDownload,
+  onSaveTemplate,
   onMove,
   onPurge,
 }: ReaderProps) {
@@ -88,6 +91,14 @@ export function Reader({
       icon: <RiDownloadLine size={20} aria-hidden />,
       label: t('mail.download'),
       run: onDownload,
+    });
+  }
+
+  if (message.body_source) {
+    actions.push({
+      icon: <RiFileTextLine size={20} aria-hidden />,
+      label: t('mail.saveAsTemplate'),
+      run: onSaveTemplate,
     });
   }
 

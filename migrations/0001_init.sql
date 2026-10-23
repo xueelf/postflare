@@ -55,6 +55,8 @@ CREATE TABLE messages (
   subject TEXT NOT NULL DEFAULT '',
   body_text TEXT,
   body_html TEXT,
+  -- 可编辑发件正文的 Inky 源码，收件邮件为空
+  body_source TEXT,
   message_id TEXT,
   in_reply_to TEXT,
   "references" TEXT,
@@ -82,6 +84,8 @@ CREATE TABLE templates (
   name TEXT NOT NULL,
   subject TEXT NOT NULL,
   body_html TEXT NOT NULL,
+  -- 模板的 Inky 源码
+  body_source TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

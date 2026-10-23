@@ -1,5 +1,5 @@
 import { RiFileTextLine } from '@remixicon/react';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { Button } from '#/client/components/button';
 import { EmptyState } from '#/client/components/empty-state';
@@ -18,13 +18,14 @@ export interface TemplateListProps {
   collapsed: boolean;
   onToggleSidebar: () => void;
   user: { name: string; email: string };
-  onCreateTemplate: () => void;
+  onImportEmail: (files: File[]) => void;
+  onImportTemplate: (files: File[]) => void;
   onLogout: () => void;
   onMenu: () => void;
 }
 
 /**
- * 模板列表负责搜索与选中，新建入口在头像菜单与空态按钮。
+ * 模板列表负责搜索与选中，模板导入入口在账户菜单与空态按钮。
  */
 export function TemplateList({
   templates,
@@ -35,11 +36,13 @@ export function TemplateList({
   collapsed,
   onToggleSidebar,
   user,
-  onCreateTemplate,
+  onImportEmail,
+  onImportTemplate,
   onLogout,
   onMenu,
 }: TemplateListProps) {
   const { locale, t } = useI18n();
+  const fileRef = useRef<HTMLInputElement>(null);
   const query = search.trim().toLowerCase();
   // 正文转纯文本只做一次，输入框每次输入都会重渲染
   const items = useMemo(
@@ -67,7 +70,8 @@ export function TemplateList({
         searchPlaceholder={t('templates.search')}
         accountMenuId="account-menu-templates"
         user={user}
-        onCreateTemplate={onCreateTemplate}
+        onImportEmail={onImportEmail}
+        onImportTemplate={onImportTemplate}
         onLogout={onLogout}
       />
       {visible.length === 0 ? (
@@ -75,8 +79,11 @@ export function TemplateList({
           icon={<RiFileTextLine aria-hidden />}
           action={
             query ? undefined : (
-              <Button variant="primary" onClick={onCreateTemplate}>
-                {t('templates.newTemplate')}
+              <Button
+                variant="primary"
+                onClick={() => fileRef.current?.click()}
+              >
+                {t('templates.importTemplate')}
               </Button>
             )
           }
@@ -102,6 +109,23 @@ export function TemplateList({
           })}
         </ul>
       )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".inky"
+        multiple
+        hidden
+        onChange={event => {
+          const files = Array.from(event.target.files ?? []);
+
+          // 清空 value，同一批文件可以再次选择
+          event.target.value = '';
+
+          if (files.length > 0) {
+            onImportTemplate(files);
+          }
+        }}
+      />
     </section>
   );
 }
