@@ -3,10 +3,10 @@ import type { NavigateFunction } from 'react-router';
 
 import { apiFetch } from '#/client/api';
 import { useToast } from '#/client/components/toast';
-import { templateHtml } from '#/client/format';
+import { readAsDataUrl } from '#/client/format';
 import { useI18n } from '#/client/i18n';
+import { compileInky } from '#/client/inky';
 import { type MailRoute, viewPath } from '#/client/route';
-import { parseTemplateFile } from '#/client/template-import';
 
 import type { ConfirmRequest } from './use-confirm';
 
@@ -15,14 +15,16 @@ export interface Template {
   name: string;
   subject: string;
   body_html: string;
+  body_source: string;
   updated_at: string;
 }
 
 export interface TemplateDraft {
-  id: string | null;
+  id: string;
   name: string;
   subject: string;
   body_html: string;
+  body_source: string;
 }
 
 export interface TemplateDeps {
@@ -31,8 +33,16 @@ export interface TemplateDeps {
   askConfirm: (request: ConfirmRequest) => void;
 }
 
-function newDraft(): TemplateDraft {
-  return { id: null, name: '', subject: '', body_html: '' };
+interface MessageTemplateSource {
+  subject: string;
+  body_html: string | null;
+  body_source: string | null;
+}
+
+const ATTACHMENT_URL_RE = /\/api\/attachments\/([\w-]+)/g;
+
+function templateName(file: File): string {
+  return file.name.replace(/\.inky$/i, '').trim();
 }
 
 function draftOf(template: Template): TemplateDraft {
@@ -40,12 +50,14 @@ function draftOf(template: Template): TemplateDraft {
     id: template.id,
     name: template.name,
     subject: template.subject,
-    body_html: templateHtml(template.body_html),
+    body_html: template.body_html,
+    body_source: template.body_source,
   };
 }
 
 /**
- * 模板：列表、新建/编辑弹窗状态与保存删除，弹窗由片段驱动。
+ * 模板：列表、导入、另存为、编辑与删除。
+ * 新建模板由 .inky 导入或阅读器另存为产生，不再提供空白模板弹窗。
  */
 export function useTemplates(
   route: MailRoute,
@@ -94,79 +106,217 @@ export function useTemplates(
       }
 
       if (!route.messageId) {
-        return newDraft();
+        return null;
       }
       const found = templates.find(item => item.id === route.messageId);
 
       if (found) {
         return draftOf(found);
       }
-      // 列表还没到就再等一轮，别把编辑错落成新建
-      return loaded ? newDraft() : current;
+      // 列表还没到就再等一轮
+      return loaded ? null : current;
     });
   }, [ready, loaded, route.template, route.messageId, templates]);
 
-  const openTemplate = (id?: string) => {
+  const openTemplate = (id: string) => {
     closeDrawer();
 
-    const found = id ? templates.find(item => item.id === id) : undefined;
+    const found = templates.find(item => item.id === id);
 
-    setEditing(found ? draftOf(found) : newDraft());
+    if (!found) {
+      return;
+    }
+    setEditing(draftOf(found));
     navigate(`${route.path}#template`, { state: { pfTemplate: true } });
+  };
+
+  // 另存为模板时把消息内联图片复制成模板自己的图片，避免原邮件删除后裂图
+  const inlineAttachmentImages = async (htmls: string[]): Promise<string[]> => {
+    const ids = [
+      ...new Set(
+        htmls.flatMap(html =>
+          [...html.matchAll(ATTACHMENT_URL_RE)]
+            .map(match => match[1])
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ),
+    ];
+
+    if (ids.length === 0) {
+      return htmls;
+    }
+    const replacements = new Map<string, string>();
+
+    for (const id of ids) {
+      const response = await apiFetch(`/api/attachments/${id}`);
+
+      if (!response.ok) {
+        throw new Error(t('templates.saveFailedRetry'));
+      }
+      replacements.set(id, await readAsDataUrl(await response.blob()));
+    }
+    return htmls.map(html =>
+      html.replace(
+        ATTACHMENT_URL_RE,
+        (match, id: string) => replacements.get(id) ?? match,
+      ),
+    );
+  };
+
+  const loadTemplate = async (file: File) => {
+    const source = await file.text();
+
+    return {
+      name: templateName(file) || t('templates.untitled'),
+      source,
+      html: (await compileInky(source)).html,
+    };
+  };
+
+  const importTemplates = (files: File[]) => {
+    closeDrawer();
+
+    (async () => {
+      let imported = 0;
+      let failed = 0;
+      let firstId = '';
+      let error = '';
+
+      for (const file of files) {
+        try {
+          const { name, html } = await loadTemplate(file);
+          const form = new FormData();
+
+          form.append('file', file);
+          form.append('name', name);
+          form.append('body_html', html);
+
+          const response = await apiFetch('/api/templates/import', {
+            method: 'POST',
+            body: form,
+          });
+
+          if (!response.ok) {
+            const data = (await response.json()) as { error?: string };
+
+            throw new Error(
+              data.error ??
+                t('templates.saveFailed', { status: response.status }),
+            );
+          }
+          const data = (await response.json()) as { id: string };
+
+          imported += 1;
+          firstId ||= data.id;
+        } catch (cause) {
+          failed += 1;
+
+          error =
+            cause instanceof Error
+              ? cause.message
+              : t('templates.saveFailedRetry');
+        }
+      }
+
+      if (imported === 0) {
+        toast.error(error || t('templates.importFailed'));
+
+        return;
+      }
+
+      await refreshTemplates();
+
+      if (failed > 0) {
+        toast.info(t('templates.importPartial', { imported, failed }));
+      } else {
+        toast.success(
+          imported === 1
+            ? t('templates.imported')
+            : t('templates.importedCount', { count: imported }),
+        );
+      }
+      navigate(`/templates/${firstId}`);
+    })();
+  };
+
+  const saveMessageAsTemplate = (message: MessageTemplateSource) => {
+    const subject = message.subject.trim();
+    const body = message.body_html;
+    const source = message.body_source;
+
+    if (!body || !source) {
+      toast.error(t('templates.noBody'));
+
+      return;
+    }
+    inlineAttachmentImages([body, source])
+      .then(async ([html = '', sourceHtml = '']) => {
+        const response = await apiFetch('/api/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: subject || t('templates.untitled'),
+            subject,
+            body_html: html,
+            body_source: sourceHtml,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = (await response.json()) as { error?: string };
+
+          throw new Error(
+            data.error ??
+              t('templates.saveFailed', { status: response.status }),
+          );
+        }
+        await refreshTemplates();
+        toast.success(t('templates.saved'));
+      })
+      .catch((error: Error) => {
+        toast.error(error.message);
+      });
   };
 
   const saveTemplate = () => {
     if (!editing) {
       return;
     }
-
     setSaving(true);
 
-    const payload = JSON.stringify({
-      name: editing.name,
-      subject: editing.subject,
-      body_html: editing.body_html,
-    });
-    const request = editing.id
-      ? apiFetch(`/api/templates/${editing.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-        })
-      : apiFetch('/api/templates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-        });
-
-    request
-      .then(async res => {
-        if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
-
-          toast.error(
-            data.error ?? t('templates.saveFailed', { status: res.status }),
-          );
-          setSaving(false);
-
-          return;
-        }
-        const data = (await res.json()) as { id: string };
-
-        toast.success(t('templates.saved'));
-        setSaving(false);
-
-        if (editing.id) {
-          navigate(route.path, { replace: true });
-        } else {
-          navigate(`/templates/${data.id}`);
-        }
-        refreshTemplates();
-      })
-      .catch(() => {
-        toast.error(t('templates.saveFailedRetry'));
-        setSaving(false);
+    const run = (async () => {
+      const html = (await compileInky(editing.body_source)).html;
+      const res = await apiFetch(`/api/templates/${editing.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editing.name,
+          subject: editing.subject,
+          body_html: html,
+          body_source: editing.body_source,
+        }),
       });
+
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+
+        toast.error(
+          data.error ?? t('templates.saveFailed', { status: res.status }),
+        );
+        setSaving(false);
+
+        return;
+      }
+      toast.success(t('templates.saved'));
+      setSaving(false);
+      navigate(route.path, { replace: true });
+      refreshTemplates();
+    })();
+
+    run.catch(() => {
+      toast.error(t('templates.saveFailedRetry'));
+      setSaving(false);
+    });
   };
 
   const removeTemplate = (id: string) => {
@@ -194,23 +344,23 @@ export function useTemplates(
     });
   };
 
-  // 导入 .eml：主题作名称、正文取 HTML，要覆盖已有内容时先确认
+  // 编辑已有模板时用 .inky 源码覆盖正文
   const importTemplateFile = (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.eml')) {
-      toast.error(t('templates.emlOnly'));
-
-      return;
-    }
-    parseTemplateFile(file, t)
-      .then(({ name, bodyHtml }) => {
+    loadTemplate(file)
+      .then(({ name, source, html }) => {
         const apply = () =>
           setEditing(current =>
             current
-              ? { ...current, name: name || current.name, body_html: bodyHtml }
+              ? {
+                  ...current,
+                  name: name || current.name,
+                  body_html: html,
+                  body_source: source,
+                }
               : current,
           );
         const hasContent = Boolean(
-          editing?.name.trim() || editing?.body_html.trim(),
+          editing?.name.trim() || editing?.body_source.trim(),
         );
 
         if (!hasContent) {
@@ -239,6 +389,8 @@ export function useTemplates(
     setEditing,
     saving,
     openTemplate,
+    importTemplates,
+    saveMessageAsTemplate,
     saveTemplate,
     removeTemplate,
     importTemplateFile,

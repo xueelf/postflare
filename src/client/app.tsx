@@ -209,9 +209,6 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     });
   };
 
-  // 包装一层：按钮点击会把事件对象当参数传入，openTemplate 只接受模板 id
-  const createTemplate = () => templates.openTemplate();
-
   const logout = () => {
     auth.logout();
     shell.closeDrawer();
@@ -233,7 +230,8 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     onToggleSidebar: shell.toggleSidebar,
     onMenu: openMenu,
     user,
-    onCreateTemplate: createTemplate,
+    onImportEmail: messages.importMessages,
+    onImportTemplate: templates.importTemplates,
     onLogout: logout,
     message: messages.openMessage,
     accountName,
@@ -256,6 +254,11 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     onDownload: () => {
       if (messageId) {
         messages.downloadMessage(messageId);
+      }
+    },
+    onSaveTemplate: () => {
+      if (messages.openMessage) {
+        templates.saveMessageAsTemplate(messages.openMessage);
       }
     },
     onMove: mailbox => {
@@ -293,7 +296,8 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
             collapsed={shell.sidebarCollapsed}
             onToggleSidebar={shell.toggleSidebar}
             user={user}
-            onCreateTemplate={createTemplate}
+            onImportEmail={messages.importMessages}
+            onImportTemplate={templates.importTemplates}
             onLogout={logout}
             onMenu={openMenu}
           />
@@ -335,7 +339,8 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
         navigate(`/${next}`);
       }}
       onCompose={() => compose.openCompose()}
-      onCreateTemplate={createTemplate}
+      onImportEmail={messages.importMessages}
+      onImportTemplate={templates.importTemplates}
       onOpenSettings={openSettings}
       onLogout={logout}
     >
@@ -348,16 +353,13 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
           to={compose.composeTo}
           subject={compose.composeSubject}
           text={compose.composeText}
+          source={compose.composeSource}
           html={compose.composeHtml}
           busy={compose.composeBusy}
           status={compose.composeStatus}
           onToChange={compose.setComposeTo}
           onSubjectChange={compose.setComposeSubject}
-          onHtmlChange={(html, text) => {
-            compose.setComposeHtml(html);
-            compose.setComposeText(text);
-          }}
-          onUploadImage={compose.uploadImage}
+          onContentChange={compose.updateComposeContent}
           onSend={compose.sendCompose}
           onDismiss={() => {
             compose.flushDraft();

@@ -10,7 +10,8 @@ export interface ListHeadProps {
   searchPlaceholder: string;
   accountMenuId: string;
   user: { name: string; email: string };
-  onCreateTemplate: () => void;
+  onImportEmail: (files: File[]) => void;
+  onImportTemplate: (files: File[]) => void;
   onLogout: () => void;
 }
 
@@ -26,7 +27,8 @@ export function ListHead({
   searchPlaceholder,
   accountMenuId,
   user,
-  onCreateTemplate,
+  onImportEmail,
+  onImportTemplate,
   onLogout,
 }: ListHeadProps) {
   return (
@@ -42,7 +44,8 @@ export function ListHead({
         <AccountMenu
           id={accountMenuId}
           user={user}
-          onCreateTemplate={onCreateTemplate}
+          onImportEmail={onImportEmail}
+          onImportTemplate={onImportTemplate}
           onLogout={onLogout}
         />
       </div>

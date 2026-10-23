@@ -1,4 +1,4 @@
-import { badRequest, notFound } from './http';
+import { notFound } from './http';
 
 export const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -133,61 +133,4 @@ export async function getAttachment(
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,
     },
   });
-}
-
-/**
- * 上传正文内联图片，存入 R2 并挂在草稿邮件下。
- */
-export async function uploadAttachment(
-  env: Env,
-  request: Request,
-  userId: string,
-): Promise<Response> {
-  let form: FormData;
-
-  try {
-    form = await request.formData();
-  } catch {
-    return badRequest('invalid form data');
-  }
-  const file = form.get('file');
-  const messageId = form.get('messageId');
-
-  if (!(file instanceof File) || typeof messageId !== 'string') {
-    return badRequest('invalid upload');
-  }
-
-  if (!file.type.startsWith('image/')) {
-    return badRequest('unsupported type');
-  }
-
-  if (file.size > IMAGE_MAX_BYTES) {
-    return Response.json({ error: 'file too large' }, { status: 413 });
-  }
-
-  const draft = await env.DB.prepare(
-    `SELECT id FROM messages WHERE id = ? AND mailbox = 'drafts' AND user_id = ?`,
-  )
-    .bind(messageId, userId)
-    .first<{ id: string }>();
-
-  if (!draft) {
-    return Response.json({ error: 'draft not found' }, { status: 404 });
-  }
-
-  const id = crypto.randomUUID();
-  const storageKey = `attachments/${messageId}/${id}`;
-
-  await env.ATTACHMENTS.put(storageKey, await file.arrayBuffer(), {
-    httpMetadata: { contentType: file.type },
-  });
-
-  await env.DB.prepare(
-    `INSERT INTO attachments (id, message_id, filename, content_type, size_bytes, storage_key)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(id, messageId, file.name, file.type, file.size, storageKey)
-    .run();
-
-  return Response.json({ id });
 }
