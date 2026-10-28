@@ -42,9 +42,9 @@
 在开发之前，请先做好以下准备工作：
 
 - 一个 Cloudflare 账号
-- JavaScript 运行环境，例如 Bun 或 Node.js
+- Bun 1.4 或更高版本
 
-本项目使用 Bun 进行开发，如果你使用 Node.js，可以将包管理器命令替换为 npm、pnpm 或 yarn 的等价写法。
+`bun run dev` 会先构建一次前端，然后监听前端改动、应用本地数据库迁移并启动 `wrangler dev`。
 
 ```sh
 bun install
@@ -57,17 +57,17 @@ bun run dev
 MAIL_DOMAIN="example.com"
 ```
 
-| 命令                        | 用途                                                             |
-| --------------------------- | ---------------------------------------------------------------- |
-| `bun run dev`               | 启动本地服务器 `http://127.0.0.1:8787`，启动前应用本地数据库迁移 |
-| `bun run build`             | 将前端资源打包至 `dist/` 目录                                    |
-| `bun run deploy`            | 应用线上数据库迁移并发布 Worker                                  |
-| `bun run db:migrate:local`  | 将 `migrations/` 中的 SQL 应用至本地数据库                       |
-| `bun run db:migrate:remote` | 将 `migrations/` 中的 SQL 应用至线上数据库                       |
-| `bun test`                  | 运行单元测试                                                     |
-| `bun run typecheck`         | 生成绑定类型并运行 TypeScript 类型检查                           |
-| `bun run lint`              | 运行 ESLint 检查                                                 |
-| `bun run format`            | 用 Prettier 格式化仓库                                           |
+| 命令                        | 用途                                                                       |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `bun run dev`               | 构建并监听前端，应用本地数据库迁移，启动本地服务器 `http://127.0.0.1:8787` |
+| `bun run build`             | 将生产版前端资源打包至 `dist/` 目录                                        |
+| `bun run deploy`            | 应用线上数据库迁移并发布 Worker                                            |
+| `bun run db:migrate:local`  | 将 `migrations/` 中的 SQL 应用至本地数据库                                 |
+| `bun run db:migrate:remote` | 将 `migrations/` 中的 SQL 应用至线上数据库                                 |
+| `bun test`                  | 运行单元测试                                                               |
+| `bun run typecheck`         | 生成绑定类型并运行 TypeScript 类型检查                                     |
+| `bun run lint`              | 运行 ESLint 检查                                                           |
+| `bun run format`            | 用 Prettier 格式化仓库                                                     |
 
 Worker 的绑定类型由 `bun run types` 从 `wrangler.jsonc` 生成到 `types/`，`dev` 与 `typecheck` 会自动执行。
 
