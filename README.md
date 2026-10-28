@@ -42,9 +42,9 @@ Postflare supports multiple languages, the same nine as Cloudflare:
 Before you start, prepare the following:
 
 - A Cloudflare account
-- A JavaScript runtime, such as Bun or Node.js
+- Bun 1.4 or later
 
-This project is developed with Bun. If you use Node.js, replace the package manager commands with the equivalent npm, pnpm, or yarn commands.
+`bun run dev` builds the client once, watches it for changes, applies local migrations, and starts `wrangler dev`.
 
 ```sh
 bun install
@@ -57,17 +57,17 @@ Local values go in a `.dev.vars` file, which overrides the values in `wrangler.j
 MAIL_DOMAIN="example.com"
 ```
 
-| Command                     | Purpose                                                                      |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| `bun run dev`               | Start the local server on `http://127.0.0.1:8787` and apply local migrations |
-| `bun run build`             | Bundle the client assets into the `dist/` directory                          |
-| `bun run deploy`            | Apply production database migrations and deploy the Worker                   |
-| `bun run db:migrate:local`  | Apply the SQL files in `migrations/` to the local database                   |
-| `bun run db:migrate:remote` | Apply the SQL files in `migrations/` to the production database              |
-| `bun test`                  | Run the unit tests                                                           |
-| `bun run typecheck`         | Generate the binding types and run the TypeScript checker                    |
-| `bun run lint`              | Run ESLint                                                                   |
-| `bun run format`            | Format the repository with Prettier                                          |
+| Command                     | Purpose                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| `bun run dev`               | Build and watch the client, apply local migrations, start the server on `http://127.0.0.1:8787` |
+| `bun run build`             | Bundle production client assets into the `dist/` directory                                      |
+| `bun run deploy`            | Apply production database migrations and deploy the Worker                                      |
+| `bun run db:migrate:local`  | Apply the SQL files in `migrations/` to the local database                                      |
+| `bun run db:migrate:remote` | Apply the SQL files in `migrations/` to the production database                                 |
+| `bun test`                  | Run the unit tests                                                                              |
+| `bun run typecheck`         | Generate the binding types and run the TypeScript checker                                       |
+| `bun run lint`              | Run ESLint                                                                                      |
+| `bun run format`            | Format the repository with Prettier                                                             |
 
 Worker binding types are generated from `wrangler.jsonc` into `types/` by `bun run types`, which `dev` and `typecheck` run for you.
 
