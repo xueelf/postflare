@@ -26,9 +26,16 @@ export function methodNotAllowed(allowed: string[] = []): Response {
 /**
  * 解析 JSON 请求体，语法错误返回 400，不让畸形请求变成 500。
  */
-export async function readJson<T>(request: Request): Promise<T | Response> {
+export async function readJson<T extends object>(
+  request: Request,
+): Promise<T | Response> {
   try {
-    return (await request.json()) as T;
+    const value = await request.json();
+
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return badRequest('invalid json');
+    }
+    return value as T;
   } catch {
     return badRequest('invalid json');
   }
