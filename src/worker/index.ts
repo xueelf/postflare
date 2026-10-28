@@ -1,4 +1,4 @@
-import { getAttachment } from './attachments';
+import { getAttachment, uploadAttachment } from './attachments';
 import {
   type AuthUser,
   authenticate,
@@ -6,7 +6,7 @@ import {
   purgeExpiredSessions,
 } from './auth';
 import { composeMessage, discardDraft, saveDraft } from './compose';
-import { jsonError, methodNotAllowed, notFound } from './http';
+import { badRequest, jsonError, methodNotAllowed, notFound } from './http';
 import { handleInbound } from './inbound';
 import { importMessages } from './message-import';
 import {
@@ -64,6 +64,8 @@ function param(params: Record<string, string>, name: string): string {
   return value;
 }
 
+class InvalidPathError extends Error {}
+
 /**
  * 按段匹配路径模式，`:` 开头的段是参数，不匹配返回 null。
  */
@@ -86,7 +88,12 @@ function matchPath(
       if (!value) {
         return null;
       }
-      params[segment.slice(1)] = decodeURIComponent(value);
+
+      try {
+        params[segment.slice(1)] = decodeURIComponent(value);
+      } catch {
+        throw new InvalidPathError('invalid path segment');
+      }
     } else if (segment !== value) {
       return null;
     }
@@ -164,6 +171,11 @@ const ROUTES: Route[] = [
       discardDraft(env, param(params, 'id'), user.id),
   },
   {
+    method: 'POST',
+    pattern: '/api/attachments',
+    handler: ({ env, request, user }) => uploadAttachment(env, request, user),
+  },
+  {
     method: 'GET',
     pattern: '/api/attachments/:id',
     handler: ({ env, params, user }) =>
@@ -229,17 +241,24 @@ export default {
 
     const allowed = new Set<string>();
 
-    for (const route of ROUTES) {
-      const params = matchPath(route.pattern, pathname);
+    try {
+      for (const route of ROUTES) {
+        const params = matchPath(route.pattern, pathname);
 
-      if (!params) {
-        continue;
-      }
-      allowed.add(route.method);
+        if (!params) {
+          continue;
+        }
+        allowed.add(route.method);
 
-      if (route.method === request.method) {
-        return route.handler({ env, request, url, params, user });
+        if (route.method === request.method) {
+          return route.handler({ env, request, url, params, user });
+        }
       }
+    } catch (error) {
+      if (error instanceof InvalidPathError) {
+        return badRequest('invalid path');
+      }
+      throw error;
     }
 
     return allowed.size > 0 ? methodNotAllowed([...allowed]) : notFound();
