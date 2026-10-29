@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
-import { apiFetch, setUnauthorizedHandler } from '#/client/api';
+import {
+  advanceAuthEpoch,
+  apiFetch,
+  setUnauthorizedHandler,
+} from '#/client/api';
 import { useToast } from '#/client/components/toast';
 import {
   type MessageKey,
@@ -15,6 +19,7 @@ import type { DomainStatus } from '#/worker/domains';
 export interface AuthState {
   setupComplete: boolean;
   user: {
+    id: string;
     email: string;
     name: string;
     language: string;
@@ -35,6 +40,7 @@ const AUTH_ERRORS: Record<string, MessageKey> = {
   'username taken': 'auth.errorUsernameTaken',
   'invalid username': 'auth.errorInvalidUsername',
   'name is empty': 'auth.errorNameEmpty',
+  'name is too long': 'auth.errorNameTooLong',
   'invalid language': 'auth.errorInvalidLanguage',
   'invalid credentials': 'auth.errorInvalidCredentials',
   'too many attempts': 'auth.errorTooManyAttempts',
@@ -59,6 +65,35 @@ export function useAuth(navigate: NavigateFunction) {
   const [domainError, setDomainError] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const authRef = useRef(auth);
+  const authUserIdRef = useRef<string | null>(null);
+  const logoutBusyRef = useRef(false);
+  const authCommandRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  authRef.current = auth;
+
+  // 会改变认证或 Cookie 的命令串行执行，登出始终排在前序认证命令之后
+  const runAuthCommand = <T>(command: () => Promise<T>): Promise<T> => {
+    const run = authCommandRef.current.then(command, command);
+
+    authCommandRef.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return run;
+  };
+
+  const commitAuth = (next: AuthState | null) => {
+    const nextUserId = next?.user?.id ?? null;
+
+    if (authUserIdRef.current !== nextUserId) {
+      authUserIdRef.current = nextUserId;
+      advanceAuthEpoch();
+    }
+    setAuth(next);
+  };
 
   // 本 Hook 在 LocaleProvider 之上运行，需自行解析语言：账号语言优先，未登录按浏览器语言
   const locale = auth?.user ? matchLocale(auth.user.language) : initialLocale();
@@ -81,13 +116,17 @@ export function useAuth(navigate: NavigateFunction) {
 
     fetch('/api/auth')
       .then(res => res.json<AuthState>())
-      .then(data => setAuth(data))
+      .then(data => commitAuth(data))
       .catch(() => setAuthError(true));
   }, []);
 
   useEffect(() => {
     loadAuth();
   }, [loadAuth]);
+
+  useEffect(() => {
+    setProfileBusy(false);
+  }, [auth?.user?.id]);
 
   // 初始化向导：加载配置域名与就绪状态
   useEffect(() => {
@@ -108,9 +147,11 @@ export function useAuth(navigate: NavigateFunction) {
       });
   }, [auth]);
 
-  // 请求收到 401 时清掉本地会话，回到登录界面
+  // 当前认证代次收到 401 时清掉本地会话，回到登录界面
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      authUserIdRef.current = null;
+      advanceAuthEpoch();
       setAuth(current => (current ? { ...current, user: null } : current));
     });
 
@@ -123,7 +164,7 @@ export function useAuth(navigate: NavigateFunction) {
     name?: string;
     language?: string;
   }) => {
-    if (!auth) {
+    if (!auth || logoutBusyRef.current) {
       return;
     }
 
@@ -131,26 +172,30 @@ export function useAuth(navigate: NavigateFunction) {
 
     const isSetup = !auth.setupComplete;
 
-    fetch(isSetup ? '/api/auth/setup' : '/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        isSetup
-          ? {
-              username: values.username,
-              name: values.name,
-              password: values.password,
-              language: values.language,
-            }
-          : { username: values.username, password: values.password },
-      ),
-    })
-      .then(async res => {
+    runAuthCommand(async () => {
+      try {
+        const res = await fetch(
+          isSetup ? '/api/auth/setup' : '/api/auth/login',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(
+              isSetup
+                ? {
+                    username: values.username,
+                    name: values.name,
+                    password: values.password,
+                    language: values.language,
+                  }
+                : { username: values.username, password: values.password },
+            ),
+          },
+        );
+
         if (!res.ok) {
           const data = (await res.json()) as { error?: string };
 
           report(data, res.status, 'auth.requestFailed');
-          setAuthBusy(false);
 
           return;
         }
@@ -159,26 +204,53 @@ export function useAuth(navigate: NavigateFunction) {
           mailDomain: string;
         };
 
-        setAuth({
+        commitAuth({
           setupComplete: true,
           user: data.user,
           mailDomain: data.mailDomain,
         });
-        setAuthBusy(false);
-      })
-      .catch(() => {
+      } catch {
         toast.error(t('auth.networkError'));
+      } finally {
         setAuthBusy(false);
-      });
+      }
+    });
   };
 
-  const logout = () => {
-    fetch('/api/auth/logout', { method: 'POST' })
-      .then(() => {
-        setAuth(current => (current ? { ...current, user: null } : current));
-        navigate('/login', { replace: true });
-      })
-      .catch(() => {});
+  const logout = async (): Promise<boolean> => {
+    if (logoutBusyRef.current) {
+      return false;
+    }
+
+    logoutBusyRef.current = true;
+    setLogoutBusy(true);
+
+    try {
+      return await runAuthCommand(async () => {
+        try {
+          const res = await apiFetch('/api/auth/logout', { method: 'POST' });
+
+          if (!res.ok) {
+            toast.error(t('app.logoutFailed'));
+
+            return false;
+          }
+          commitAuth(
+            authRef.current ? { ...authRef.current, user: null } : null,
+          );
+          navigate('/login', { replace: true });
+
+          return true;
+        } catch {
+          toast.error(t('app.logoutFailed'));
+
+          return false;
+        }
+      });
+    } finally {
+      logoutBusyRef.current = false;
+      setLogoutBusy(false);
+    }
   };
 
   const changePassword = (current: string, next: string) => {
@@ -219,6 +291,11 @@ export function useAuth(navigate: NavigateFunction) {
     name?: string;
     language?: string;
   }) => {
+    const requestUserId = authRef.current?.user?.id;
+
+    if (!requestUserId) {
+      return Promise.resolve(false);
+    }
     setProfileBusy(true);
 
     return apiFetch('/api/auth/profile', {
@@ -227,6 +304,9 @@ export function useAuth(navigate: NavigateFunction) {
       body: JSON.stringify(patch),
     })
       .then(async res => {
+        if (authRef.current?.user?.id !== requestUserId) {
+          return false;
+        }
         setProfileBusy(false);
 
         if (!res.ok) {
@@ -241,13 +321,18 @@ export function useAuth(navigate: NavigateFunction) {
         const data = (await res.json()) as { user: AuthState['user'] };
 
         setAuth(current =>
-          current ? { ...current, user: data.user } : current,
+          current?.user?.id === requestUserId
+            ? { ...current, user: data.user }
+            : current,
         );
         toast.success(t('auth.saved'));
 
         return true;
       })
       .catch(() => {
+        if (authRef.current?.user?.id !== requestUserId) {
+          return false;
+        }
         setProfileBusy(false);
         toast.error(t('auth.saveFailedRetry'));
 
@@ -257,15 +342,18 @@ export function useAuth(navigate: NavigateFunction) {
 
   // 一次性链接：设置密码后自动登录
   const completeInvite = (token: string, values: InviteValues) => {
+    if (logoutBusyRef.current) {
+      return Promise.resolve(false);
+    }
     setAuthBusy(true);
 
-    return fetch(`/api/invite/${token}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    })
-      .then(async res => {
-        setAuthBusy(false);
+    return runAuthCommand(async () => {
+      try {
+        const res = await fetch(`/api/invite/${token}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        });
 
         if (!res.ok) {
           report(
@@ -278,20 +366,21 @@ export function useAuth(navigate: NavigateFunction) {
         }
         const data = (await res.json()) as { user: AuthState['user'] };
 
-        setAuth(current =>
-          current ? { ...current, user: data.user } : current,
+        commitAuth(
+          authRef.current ? { ...authRef.current, user: data.user } : null,
         );
         toast.success(t('auth.passwordSet'));
         navigate('/inbox', { replace: true });
 
         return true;
-      })
-      .catch(() => {
-        setAuthBusy(false);
+      } catch {
         toast.error(t('auth.passwordSetFailedRetry'));
 
         return false;
-      });
+      } finally {
+        setAuthBusy(false);
+      }
+    });
   };
 
   return {
@@ -308,5 +397,6 @@ export function useAuth(navigate: NavigateFunction) {
     changePassword,
     profileBusy,
     updateProfile,
+    logoutBusy,
   };
 }
