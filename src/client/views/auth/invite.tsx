@@ -67,6 +67,9 @@ export function Invite({ token, busy, onSubmit }: InviteProps) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
 
+    if (busy) {
+      return;
+    }
     onSubmit(
       token,
       invite
@@ -103,6 +106,7 @@ export function Invite({ token, busy, onSubmit }: InviteProps) {
                     <FormItem label={t('auth.interfaceLanguage')}>
                       <select
                         value={language}
+                        disabled={busy}
                         onChange={event =>
                           setLanguage(event.target.value as Locale)
                         }
@@ -130,6 +134,7 @@ export function Invite({ token, busy, onSubmit }: InviteProps) {
                         value={username}
                         required
                         autoComplete="off"
+                        disabled={busy}
                         onChange={event => setUsername(event.target.value)}
                       />
                     </FormItem>
@@ -138,6 +143,7 @@ export function Invite({ token, busy, onSubmit }: InviteProps) {
                         value={name}
                         required
                         autoComplete="nickname"
+                        disabled={busy}
                         onChange={event => setName(event.target.value)}
                       />
                     </FormItem>
@@ -157,10 +163,11 @@ export function Invite({ token, busy, onSubmit }: InviteProps) {
                     required
                     minLength={8}
                     autoComplete="new-password"
+                    disabled={busy}
                     onChange={event => setPassword(event.target.value)}
                   />
                 </FormItem>
-                <ConfirmPasswordField password={password} />
+                <ConfirmPasswordField password={password} disabled={busy} />
                 <Button
                   type="submit"
                   variant="primary"
