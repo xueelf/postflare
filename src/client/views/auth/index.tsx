@@ -115,14 +115,12 @@ export function Auth({
             <DialogHead title={t('auth.signIn')} />
             <div className="auth-card-body">
               <FormItem
-                label={
-                  <span className="form-label-main">
-                    {t('auth.username')}
-                    <FormHelp
-                      label={t('auth.usernameHelp')}
-                      onClick={() => setHelp('username')}
-                    />
-                  </span>
+                label={t('auth.username')}
+                help={
+                  <FormHelp
+                    label={t('auth.usernameHelp')}
+                    onClick={() => setHelp('username')}
+                  />
                 }
               >
                 <input
@@ -174,14 +172,12 @@ export function Auth({
                 </select>
               </FormItem>
               <FormItem
-                label={
-                  <span className="form-label-main">
-                    {t('auth.mailDomain')}
-                    <FormHelp
-                      label={t('auth.mailDomainHelp')}
-                      onClick={() => setHelp('domain')}
-                    />
-                  </span>
+                label={t('auth.mailDomain')}
+                help={
+                  <FormHelp
+                    label={t('auth.mailDomainHelp')}
+                    onClick={() => setHelp('domain')}
+                  />
                 }
               >
                 {domainError ? (
