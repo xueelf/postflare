@@ -1,62 +1,76 @@
-import { extractAttachmentIds, IMAGE_MAX_BYTES } from './attachments';
+import { extractAttachmentIds, replaceAttachmentUrls } from '#/attachment-url';
+import { MAX_SUBJECT_LENGTH, MAX_TEMPLATE_BYTES } from '#/limits';
+
 import { chunks, DB_PARAM_LIMIT, deleteObjects } from './batch';
 import { badRequest, jsonError, notFound, readJson } from './http';
-
-const MAX_TEMPLATE_BYTES = 10 * 1024 * 1024;
+import { rowTooLarge } from './row-size';
 
 interface TemplatePayload {
   name: string;
   subject: string;
   body_html: string;
   body_source: string;
+  pruneIds: string[];
 }
 
-function createTemplatePayload(
+export function createTemplatePayload(
   name: string,
   subject: string,
   body: string,
   source: string,
+  pruneIds: string[] = [],
 ): TemplatePayload | Response {
   if (!name) {
     return badRequest('template name is empty');
   }
 
-  if (!body) {
-    return badRequest('template body is empty');
-  }
-
-  if (!source) {
-    return badRequest('template source is empty');
+  if (subject.length > MAX_SUBJECT_LENGTH) {
+    return badRequest('subject too long');
   }
   return {
     name,
     subject,
     body_html: body,
     body_source: source,
+    pruneIds,
   };
 }
 
-function extractTemplatePayload(
-  payload: TemplatePayload,
-):
-  | { payload: TemplatePayload; html: string; images: ExtractedImage[] }
-  | Response {
-  const extracted = extractDataImagesFromParts([
-    payload.body_html,
-    payload.body_source,
-  ]);
-
-  if (typeof extracted === 'string') {
-    return badRequest(extracted);
+export function parseTemplatePayload(payload: {
+  name?: unknown;
+  subject?: unknown;
+  body_html?: unknown;
+  body_source?: unknown;
+  pruneIds?: unknown;
+}): TemplatePayload | Response {
+  if (
+    typeof payload.name !== 'string' ||
+    typeof payload.subject !== 'string' ||
+    typeof payload.body_html !== 'string' ||
+    typeof payload.body_source !== 'string'
+  ) {
+    return badRequest('invalid template payload');
   }
-  return {
-    payload: {
-      ...payload,
-      body_source: extracted.parts[1] ?? '',
-    },
-    html: extracted.parts[0] ?? '',
-    images: extracted.images,
-  };
+
+  let pruneIds: string[] = [];
+
+  if (payload.pruneIds !== undefined) {
+    if (
+      !Array.isArray(payload.pruneIds) ||
+      payload.pruneIds.some(value => typeof value !== 'string')
+    ) {
+      return badRequest('invalid prune ids');
+    }
+    pruneIds = [...new Set(payload.pruneIds)];
+  }
+
+  return createTemplatePayload(
+    payload.name.trim(),
+    payload.subject.trim(),
+    payload.body_html.trim(),
+    payload.body_source.trim(),
+    pruneIds,
+  );
 }
 
 async function readTemplatePayload(
@@ -67,163 +81,58 @@ async function readTemplatePayload(
     subject?: unknown;
     body_html?: unknown;
     body_source?: unknown;
+    pruneIds?: unknown;
   }>(request);
 
   if (payload instanceof Response) {
     return payload;
   }
-  return createTemplatePayload(
-    typeof payload.name === 'string' ? payload.name.trim() : '',
-    typeof payload.subject === 'string' ? payload.subject.trim() : '',
-    typeof payload.body_html === 'string' ? payload.body_html.trim() : '',
-    typeof payload.body_source === 'string' ? payload.body_source.trim() : '',
-  );
+
+  return parseTemplatePayload(payload);
 }
 
-/**
- * 模板的创建与更新共用，解析负载并提取内联图片。
- */
-async function parseTemplateRequest(
-  request: Request,
-): Promise<
-  | { payload: TemplatePayload; html: string; images: ExtractedImage[] }
-  | Response
-> {
-  const payload = await readTemplatePayload(request);
-
-  if (payload instanceof Response) {
-    return payload;
-  }
-  return extractTemplatePayload(payload);
-}
-
-interface ExtractedImage {
-  id: string;
-  mimeType: string;
-  filename: string;
-  data: Uint8Array;
-}
-
-/**
- * 从模板正文和源码中提取 base64 内联图片，替换为应用地址并返回图片数据。
- * 相同 data URL 的图片只存一份，超过上限时返回错误。
- */
-function extractDataImagesFromParts(
-  parts: string[],
-): { parts: string[]; images: ExtractedImage[] } | string {
-  const ids = new Map<string, string>();
-  const images: ExtractedImage[] = [];
-
-  let error = '';
-
-  const rewrite = (html: string) =>
-    html.replace(
-      /data:image\/([\w.+-]+);base64,([A-Za-z0-9+/=]+)/g,
-      (match, subtype: string) => {
-        const existing = ids.get(match);
-
-        if (existing) {
-          return `/api/attachments/${existing}`;
-        }
-        const data = base64ToBytes(match.slice(match.indexOf(',') + 1));
-
-        if (data.byteLength > IMAGE_MAX_BYTES) {
-          error = 'image too large';
-
-          return match;
-        }
-        const id = crypto.randomUUID();
-
-        ids.set(match, id);
-
-        images.push({
-          id,
-          mimeType: `image/${subtype}`,
-          filename: `image.${subtype.replace(/\+.*$/, '')}`,
-          data,
-        });
-
-        return `/api/attachments/${id}`;
-      },
-    );
-
-  const rewritten = parts.map(rewrite);
-
-  if (error) {
-    return error;
-  }
-  return { parts: rewritten, images };
-}
-
-/**
- * 从一段 HTML 提取内联图片，供测试和只处理正文的调用方使用。
- */
-export function extractDataImages(
-  html: string,
-): { html: string; images: ExtractedImage[] } | string {
-  const extracted = extractDataImagesFromParts([html]);
-
-  if (typeof extracted === 'string') {
-    return extracted;
-  }
-  return { html: extracted.parts[0] ?? '', images: extracted.images };
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function storeTemplateImages(
+async function templateAttachments(
   env: Env,
   templateId: string,
-  images: ExtractedImage[],
-): Promise<void> {
-  for (const image of images) {
-    const storageKey = `attachments/templates/${templateId}/${image.id}`;
-
-    await env.ATTACHMENTS.put(storageKey, image.data, {
-      httpMetadata: { contentType: image.mimeType },
-    });
-
-    await env.DB.prepare(
-      `INSERT INTO attachments (id, template_id, filename, content_type, size_bytes, storage_key)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        image.id,
-        templateId,
-        image.filename,
-        image.mimeType,
-        image.data.byteLength,
-        storageKey,
-      )
-      .run();
-  }
-}
-
-// 清理模板下不再被正文或源码引用的图片连同 R2 对象，传空内容即全部清理
-async function pruneTemplateImages(
-  env: Env,
-  templateId: string,
-  html: string,
-  source: string,
-): Promise<void> {
-  const referenced = new Set([
-    ...extractAttachmentIds(html),
-    ...extractAttachmentIds(source),
-  ]);
+): Promise<Array<{ id: string; storage_key: string }>> {
   const { results } = await env.DB.prepare(
     `SELECT id, storage_key FROM attachments WHERE template_id = ?`,
   )
     .bind(templateId)
     .all<{ id: string; storage_key: string }>();
-  const stale = results.filter(row => !referenced.has(row.id));
+
+  return results;
+}
+
+async function deleteTemplateData(env: Env, id: string): Promise<void> {
+  // 先删 R2 对象，再删数据库行；R2 失败时元数据还在，可以重试
+  const attachments = await templateAttachments(env, id);
+
+  await deleteObjects(
+    env,
+    attachments.map(row => row.storage_key),
+  );
+
+  await env.DB.prepare('DELETE FROM templates WHERE id = ?').bind(id).run();
+}
+
+// 只清理本次保存能够证明已失去引用的模板图片，避免删除其它标签页的新上传
+async function pruneTemplateImages(
+  env: Env,
+  templateId: string,
+  html: string,
+  source: string,
+  pruneIds: string[],
+): Promise<void> {
+  const referenced = new Set([
+    ...extractAttachmentIds(html),
+    ...extractAttachmentIds(source),
+  ]);
+  const known = new Set(pruneIds);
+  const results = await templateAttachments(env, templateId);
+  const stale = results.filter(
+    row => known.has(row.id) && !referenced.has(row.id),
+  );
 
   if (stale.length === 0) {
     return;
@@ -265,10 +174,7 @@ export async function listTemplates(
 
 async function parseTemplateImport(
   request: Request,
-): Promise<
-  | { payload: TemplatePayload; html: string; images: ExtractedImage[] }
-  | Response
-> {
+): Promise<TemplatePayload | Response> {
   const form = await request.formData().catch(() => null);
 
   if (!form) {
@@ -294,36 +200,136 @@ async function parseTemplateImport(
   }
 
   const source = (await file.text()).trim();
-  const payload = createTemplatePayload(
-    name.trim(),
-    name.trim(),
-    body.trim(),
-    source,
-  );
 
-  if (payload instanceof Response) {
-    return payload;
+  return createTemplatePayload(name.trim(), name.trim(), body.trim(), source);
+}
+
+export function templateRowTooLarge(
+  id: string,
+  userId: string,
+  payload: TemplatePayload,
+): boolean {
+  return rowTooLarge([
+    id,
+    userId,
+    payload.name,
+    payload.subject,
+    payload.body_html,
+    payload.body_source,
+    '0000-00-00 00:00:00',
+    '0000-00-00 00:00:00',
+  ]);
+}
+
+async function copyTemplateAttachments(
+  env: Env,
+  userId: string,
+  templateId: string,
+  bodyHtml: string,
+  bodySource: string,
+): Promise<{ bodyHtml: string; bodySource: string } | Response> {
+  const ids = new Set([
+    ...extractAttachmentIds(bodyHtml),
+    ...extractAttachmentIds(bodySource),
+  ]);
+
+  if (ids.size === 0) {
+    return { bodyHtml, bodySource };
   }
-  return extractTemplatePayload(payload);
+
+  const replacements = new Map<string, string>();
+
+  for (const id of ids) {
+    const attachment = await env.DB.prepare(
+      `SELECT a.filename, a.content_type, a.storage_key
+       FROM attachments a
+       WHERE a.id = ?
+         AND (
+           EXISTS (SELECT 1 FROM messages m WHERE m.id = a.message_id AND m.user_id = ?)
+           OR EXISTS (SELECT 1 FROM templates t WHERE t.id = a.template_id AND t.user_id = ?)
+         )`,
+    )
+      .bind(id, userId, userId)
+      .first<{ filename: string; content_type: string; storage_key: string }>();
+
+    if (!attachment) {
+      return badRequest('attachment not found');
+    }
+
+    const object = await env.ATTACHMENTS.get(attachment.storage_key);
+
+    if (!object) {
+      return badRequest('attachment not found');
+    }
+
+    const newId = crypto.randomUUID();
+    const storageKey = `attachments/${templateId}/${newId}`;
+
+    await env.ATTACHMENTS.put(storageKey, object.body, {
+      httpMetadata: { contentType: attachment.content_type },
+    });
+
+    try {
+      await env.DB.prepare(
+        `INSERT INTO attachments
+           (id, template_id, filename, content_type, size_bytes, storage_key)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          newId,
+          templateId,
+          attachment.filename,
+          attachment.content_type,
+          object.size,
+          storageKey,
+        )
+        .run();
+    } catch (error) {
+      await env.ATTACHMENTS.delete(storageKey).catch(() => {});
+
+      throw error;
+    }
+
+    replacements.set(id, newId);
+  }
+
+  const rewrite = (html: string) =>
+    replaceAttachmentUrls(html, id => {
+      const next = replacements.get(id);
+
+      return next ? `/api/attachments/${next}` : null;
+    });
+
+  return {
+    bodyHtml: rewrite(bodyHtml),
+    bodySource: rewrite(bodySource),
+  };
 }
 
 async function insertTemplate(
   env: Env,
   userId: string,
   payload: TemplatePayload,
-  html: string,
-  images: ExtractedImage[],
-): Promise<string> {
-  const id = crypto.randomUUID();
+  id = crypto.randomUUID(),
+): Promise<string | Response> {
+  if (templateRowTooLarge(id, userId, payload)) {
+    return jsonError('template too large', 413);
+  }
 
   await env.DB.prepare(
     `INSERT INTO templates (
        id, user_id, name, subject, body_html, body_source
      ) VALUES (?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, userId, payload.name, payload.subject, html, payload.body_source)
+    .bind(
+      id,
+      userId,
+      payload.name,
+      payload.subject,
+      payload.body_html,
+      payload.body_source,
+    )
     .run();
-  await storeTemplateImages(env, id, images);
 
   return id;
 }
@@ -349,14 +355,11 @@ export async function importTemplate(
     return parsed;
   }
 
-  const id = await insertTemplate(
-    env,
-    userId,
-    parsed.payload,
-    parsed.html,
-    parsed.images,
-  );
+  const id = await insertTemplate(env, userId, parsed);
 
+  if (id instanceof Response) {
+    return id;
+  }
   return createdTemplate(id);
 }
 
@@ -365,19 +368,54 @@ export async function createTemplate(
   request: Request,
   userId: string,
 ): Promise<Response> {
-  const parsed = await parseTemplateRequest(request);
+  const parsed = await readTemplatePayload(request);
 
   if (parsed instanceof Response) {
     return parsed;
   }
 
-  const id = await insertTemplate(
-    env,
-    userId,
-    parsed.payload,
-    parsed.html,
-    parsed.images,
-  );
+  const id = crypto.randomUUID();
+  const inserted = await insertTemplate(env, userId, parsed, id);
+
+  if (inserted instanceof Response) {
+    return inserted;
+  }
+
+  try {
+    const copied = await copyTemplateAttachments(
+      env,
+      userId,
+      id,
+      parsed.body_html,
+      parsed.body_source,
+    );
+
+    if (copied instanceof Response) {
+      try {
+        await deleteTemplateData(env, id);
+      } catch (error) {
+        console.error('failed to clean up template after copy error', error);
+      }
+
+      return copied;
+    }
+
+    if (
+      copied.bodyHtml !== parsed.body_html ||
+      copied.bodySource !== parsed.body_source
+    ) {
+      await env.DB.prepare(
+        `UPDATE templates SET body_html = ?, body_source = ?
+         WHERE id = ? AND user_id = ?`,
+      )
+        .bind(copied.bodyHtml, copied.bodySource, id, userId)
+        .run();
+    }
+  } catch (error) {
+    await deleteTemplateData(env, id).catch(() => {});
+
+    throw error;
+  }
 
   return createdTemplate(id);
 }
@@ -388,10 +426,14 @@ export async function updateTemplate(
   request: Request,
   userId: string,
 ): Promise<Response> {
-  const parsed = await parseTemplateRequest(request);
+  const parsed = await readTemplatePayload(request);
 
   if (parsed instanceof Response) {
     return parsed;
+  }
+
+  if (templateRowTooLarge(id, userId, parsed)) {
+    return jsonError('template too large', 413);
   }
 
   const updated = await env.DB.prepare(
@@ -401,10 +443,10 @@ export async function updateTemplate(
      WHERE id = ? AND user_id = ?`,
   )
     .bind(
-      parsed.payload.name,
-      parsed.payload.subject,
-      parsed.html,
-      parsed.payload.body_source,
+      parsed.name,
+      parsed.subject,
+      parsed.body_html,
+      parsed.body_source,
       id,
       userId,
     )
@@ -413,8 +455,13 @@ export async function updateTemplate(
   if (updated.meta.changes === 0) {
     return notFound();
   }
-  await storeTemplateImages(env, id, parsed.images);
-  await pruneTemplateImages(env, id, parsed.html, parsed.payload.body_source);
+  await pruneTemplateImages(
+    env,
+    id,
+    parsed.body_html,
+    parsed.body_source,
+    parsed.pruneIds,
+  );
 
   return Response.json({ ok: true });
 }
@@ -434,9 +481,7 @@ export async function deleteTemplate(
     return notFound();
   }
 
-  // 模板图片连同 R2 对象一并清理
-  await pruneTemplateImages(env, id, '', '');
-  await env.DB.prepare('DELETE FROM templates WHERE id = ?').bind(id).run();
+  await deleteTemplateData(env, id);
 
   return Response.json({ ok: true });
 }

@@ -1,45 +1,97 @@
 import { expect, test } from 'bun:test';
 
-import { extractDataImages } from '#/worker/templates';
+import { MAX_TEMPLATE_BYTES } from '#/limits';
+import {
+  createTemplatePayload,
+  parseTemplatePayload,
+  templateRowTooLarge,
+} from '#/worker/templates';
 
-test('extractDataImages 提取内联图片并重写为应用地址', () => {
-  const png = Buffer.from('fake-image').toString('base64');
-  const result = extractDataImages(
-    `<p>正文</p><img src="data:image/png;base64,${png}"><img src="https://example.com/a.png">`,
+test('模板保留用户写入的 base64 data URL，不做解码或替换', () => {
+  const source =
+    '<image src="data:image/png;base64,not-valid-base64" alt=""></image>';
+  const payload = createTemplatePayload(
+    '测试',
+    '主题',
+    `<p>${source}</p>`,
+    source,
   );
 
-  if (typeof result === 'string') {
-    throw new Error('unexpected error');
+  expect(payload instanceof Response).toBe(false);
+
+  if (!(payload instanceof Response)) {
+    expect(payload.body_html).toContain(
+      'data:image/png;base64,not-valid-base64',
+    );
+    expect(payload.body_source).toBe(source);
   }
-  expect(result.images).toHaveLength(1);
-  expect(result.images[0]?.mimeType).toBe('image/png');
-  expect(result.html).toContain(`/api/attachments/${result.images[0]?.id}`);
-  expect(result.html).toContain('https://example.com/a.png');
-  expect(result.html).not.toContain('data:image');
 });
 
-test('extractDataImages 相同图片只存一份', () => {
-  const dataUrl = `data:image/png;base64,${Buffer.from('x').toString('base64')}`;
-  const result = extractDataImages(
-    `<img src="${dataUrl}"><img src="${dataUrl}">`,
+test('模板允许用户清空正文和源码', () => {
+  const payload = createTemplatePayload('空模板', '', '', '');
+
+  expect(payload instanceof Response).toBe(false);
+
+  if (!(payload instanceof Response)) {
+    expect(payload.body_html).toBe('');
+    expect(payload.body_source).toBe('');
+  }
+});
+
+test('模板字段类型错误返回 400，不解释成清空', () => {
+  const wrongSubject = parseTemplatePayload({
+    name: '模板',
+    subject: 1,
+    body_html: '',
+    body_source: '',
+  });
+  const wrongBody = parseTemplatePayload({
+    name: '模板',
+    subject: '',
+    body_html: null,
+    body_source: '',
+  });
+
+  expect(wrongSubject instanceof Response).toBe(true);
+  expect(wrongBody instanceof Response).toBe(true);
+
+  if (wrongSubject instanceof Response) {
+    expect(wrongSubject.status).toBe(400);
+  }
+
+  if (wrongBody instanceof Response) {
+    expect(wrongBody.status).toBe(400);
+  }
+});
+
+test('模板允许合法空字符串字段', () => {
+  const payload = parseTemplatePayload({
+    name: '空模板',
+    subject: '',
+    body_html: '',
+    body_source: '',
+  });
+
+  expect(payload instanceof Response).toBe(false);
+
+  if (!(payload instanceof Response)) {
+    expect(payload.subject).toBe('');
+    expect(payload.body_html).toBe('');
+    expect(payload.body_source).toBe('');
+  }
+});
+
+test('模板超过 D1 单行上限时拒绝保存', () => {
+  const payload = createTemplatePayload(
+    '大模板',
+    '主题',
+    `<p>${'a'.repeat(MAX_TEMPLATE_BYTES)}</p>`,
+    '<p>正文</p>',
   );
 
-  if (typeof result === 'string') {
-    throw new Error('unexpected error');
+  expect(payload instanceof Response).toBe(false);
+
+  if (!(payload instanceof Response)) {
+    expect(templateRowTooLarge('template-id', 'user-id', payload)).toBe(true);
   }
-  expect(result.images).toHaveLength(1);
-
-  const url = `/api/attachments/${result.images[0]?.id}`;
-
-  expect(result.html).toBe(`<img src="${url}"><img src="${url}">`);
-});
-
-test('extractDataImages 无内联图片时原样返回', () => {
-  const result = extractDataImages('<p>纯文本</p>');
-
-  if (typeof result === 'string') {
-    throw new Error('unexpected error');
-  }
-  expect(result.images).toHaveLength(0);
-  expect(result.html).toBe('<p>纯文本</p>');
 });
