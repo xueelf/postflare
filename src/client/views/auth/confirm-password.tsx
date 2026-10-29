@@ -5,12 +5,16 @@ import { useI18n } from '#/client/i18n';
 
 export interface ConfirmPasswordFieldProps {
   password: string;
+  disabled?: boolean;
 }
 
 /**
  * 确认密码：两次不一致交给原生校验，浏览器气泡展示文案。
  */
-export function ConfirmPasswordField({ password }: ConfirmPasswordFieldProps) {
+export function ConfirmPasswordField({
+  password,
+  disabled = false,
+}: ConfirmPasswordFieldProps) {
   const { t } = useI18n();
   const [value, setValue] = useState('');
   const ref = useRef<HTMLInputElement>(null);
@@ -28,6 +32,7 @@ export function ConfirmPasswordField({ password }: ConfirmPasswordFieldProps) {
         type="password"
         required
         autoComplete="new-password"
+        disabled={disabled}
         onChange={event => setValue(event.target.value)}
       />
     </FormItem>

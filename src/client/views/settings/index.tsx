@@ -134,8 +134,13 @@ export function Settings({
           title={t(LABEL_KEYS.language)}
           value={user.language}
           options={LANGUAGE_OPTIONS}
+          busy={profileBusy}
           onSelect={value => {
-            onSaveProfile({ language: value }).then(() => closeItem());
+            onSaveProfile({ language: value }).then(saved => {
+              if (saved) {
+                closeItem();
+              }
+            });
           }}
           onClose={closeItem}
         />
@@ -210,6 +215,7 @@ function ChoiceDialog({
   title,
   value,
   options,
+  busy = false,
   onSelect,
   onClose,
 }: {
@@ -217,11 +223,19 @@ function ChoiceDialog({
   title: string;
   value: string;
   options: Array<{ value: string; label: string }>;
+  busy?: boolean;
   onSelect: (value: string) => void;
   onClose: () => void;
 }) {
   return (
-    <Modal title={title} onDismiss={onClose}>
+    <Modal
+      title={title}
+      onDismiss={() => {
+        if (!busy) {
+          onClose();
+        }
+      }}
+    >
       <div className="settings-list">
         {options.map((option, index) => (
           <Fragment key={option.value}>
@@ -231,6 +245,7 @@ function ChoiceDialog({
                 type="radio"
                 name={name}
                 checked={option.value === value}
+                disabled={busy}
                 onChange={() => onSelect(option.value)}
               />
               {option.label}
@@ -271,10 +286,14 @@ function TextDialog({
   return (
     <Modal
       title={title}
-      onDismiss={onClose}
+      onDismiss={() => {
+        if (!busy) {
+          onClose();
+        }
+      }}
       footer={
         <>
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={onClose} disabled={busy}>
             {t('settings.cancel')}
           </button>
           <Button
@@ -305,6 +324,7 @@ function TextDialog({
           <input
             value={value}
             required
+            disabled={busy}
             autoComplete={autoComplete}
             onChange={event => setValue(event.target.value)}
           />
@@ -334,10 +354,14 @@ function PasswordDialog({
   return (
     <Modal
       title={t(LABEL_KEYS.password)}
-      onDismiss={onClose}
+      onDismiss={() => {
+        if (!busy) {
+          onClose();
+        }
+      }}
       footer={
         <>
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={onClose} disabled={busy}>
             {t('settings.cancel')}
           </button>
           <Button
@@ -368,6 +392,7 @@ function PasswordDialog({
             type="password"
             value={current}
             required
+            disabled={busy}
             autoComplete="current-password"
             onChange={event => setCurrent(event.target.value)}
           />
@@ -377,6 +402,7 @@ function PasswordDialog({
             type="password"
             value={next}
             required
+            disabled={busy}
             minLength={8}
             autoComplete="new-password"
             onChange={event => setNext(event.target.value)}
