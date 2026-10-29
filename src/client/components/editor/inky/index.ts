@@ -1,9 +1,3 @@
-export {
-  InkyEditor,
-  type InkyEditorContent,
-  type InkyEditorProps,
-} from './editor';
-export { InkyExtensions } from './schema';
-export { InkySourceEditor } from './source-editor';
+export { InkyEditor } from './editor';
 
 import './style.css';
