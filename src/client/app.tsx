@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   Navigate,
   Route,
@@ -7,35 +8,36 @@ import {
   useParams,
 } from 'react-router';
 
+import { apiFetch } from './api';
 import { Button } from './components/button';
 import { ConfirmDialog } from './components/confirm-dialog';
+import { Modal } from './components/modal';
 import { Notice } from './components/notice';
 import { displayName } from './format';
 import { useAuth } from './hooks/use-auth';
-import { useCompose } from './hooks/use-compose';
+import { useComposeWindows } from './hooks/use-compose-windows';
 import { useConfirm } from './hooks/use-confirm';
 import { useMessages } from './hooks/use-messages';
 import { useShell } from './hooks/use-shell';
-import { useTabFields } from './hooks/use-tab-fields';
 import { useTemplates } from './hooks/use-templates';
 import { useTheme } from './hooks/use-theme';
 import { initialLocale, LocaleProvider, matchLocale, useI18n } from './i18n';
 import { Layout } from './layout';
+import { draftLockName, templateLockName, withAvailableLock } from './locks';
 import {
   type View,
   isSettingsDialog,
-  isTemplateDialog,
   MAILBOX_VIEWS,
   parseRoute,
   viewPath,
 } from './route';
 import { Auth } from './views/auth';
 import { Invite } from './views/auth/invite';
-import { Compose } from './views/compose';
+import { ComposeWindow } from './views/compose/window';
 import { type MailProps, Mail } from './views/mail';
 import { Settings } from './views/settings';
 import { Templates } from './views/templates';
-import { TemplateDialog } from './views/templates/dialog';
+import { TemplateWindow } from './views/templates/window';
 import { Users } from './views/users';
 
 /**
@@ -51,7 +53,7 @@ export function App() {
 
   return (
     <LocaleProvider locale={locale}>
-      <AppShell auth={auth} />
+      <AppShell key={auth.auth?.user?.id ?? 'anonymous'} auth={auth} />
     </LocaleProvider>
   );
 }
@@ -70,30 +72,52 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     view,
     q,
     messageId,
-    compose: location.hash === '#compose',
-    template: isTemplateDialog(location.hash),
+    hash: location.hash,
+    state: location.state,
     path: location.pathname + location.search,
   };
+  const routeRef = useRef({ view, q, messageId });
+
+  routeRef.current = { view, q, messageId };
 
   const confirm = useConfirm();
   const shell = useShell();
   const ready = !!auth.auth?.user;
-  const messages = useMessages(route, navigate, ready, confirm.askConfirm);
-  const compose = useCompose(route, {
-    navigate,
-    closeDrawer: shell.closeDrawer,
-    openMessage: messages.openMessage,
-    refreshList: messages.refreshList,
-    refreshCounts: messages.refreshCounts,
-  });
+  const userId = auth.auth?.user?.id ?? '';
+  const messages = useMessages(route, navigate, ready, confirm.askConfirm, id =>
+    withAvailableLock(draftLockName(userId, id), () =>
+      apiFetch(`/api/drafts/${id}`, { method: 'DELETE' }),
+    ),
+  );
+  const composeWindows = useComposeWindows();
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (composeWindows.windows.some(window => window.dirty)) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [composeWindows.windows]);
+
   const templates = useTemplates(route, ready, {
     navigate,
     closeDrawer: shell.closeDrawer,
     askConfirm: confirm.askConfirm,
+    deleteTemplate: id =>
+      withAvailableLock(templateLockName(userId, id), () =>
+        apiFetch(`/api/templates/${id}`, { method: 'DELETE' }),
+      ),
   });
   const { theme, setTheme } = useTheme();
-
-  useTabFields();
+  const [logoutPrompt, setLogoutPrompt] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
+  const logoutBlocked = logoutBusy || auth.logoutBusy;
 
   if (!auth.auth) {
     return (
@@ -126,7 +150,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     return (
       <Invite
         token={location.pathname.slice('/invite/'.length)}
-        busy={auth.authBusy}
+        busy={auth.authBusy || auth.logoutBusy}
         onSubmit={auth.completeInvite}
       />
     );
@@ -140,7 +164,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
         mailDomain={auth.auth.mailDomain}
         domain={auth.domain}
         domainError={auth.domainError}
-        busy={auth.authBusy}
+        busy={auth.authBusy || auth.logoutBusy}
         onSubmit={auth.submitAuth}
       />
     );
@@ -189,14 +213,6 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
   const closeReader = () => closeOverlay('pfOpen', viewPath(view, null, q));
 
-  const closeCompose = () => {
-    compose.resetCompose();
-    closeOverlay('pfCompose', viewPath(view, messageId, q));
-  };
-
-  const closeTemplate = () =>
-    closeOverlay('pfTemplate', location.pathname + location.search);
-
   // 设置弹窗由片段驱动，弹窗内部的层级留在组件里，不进地址
   const closeSettings = () =>
     closeOverlay('pfSettings', location.pathname + location.search);
@@ -210,6 +226,16 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
   };
 
   const logout = () => {
+    if (composeWindows.windows.some(window => window.dirty)) {
+      setLogoutError('');
+      setLogoutPrompt(true);
+
+      return;
+    }
+
+    if (auth.logoutBusy) {
+      return;
+    }
     auth.logout();
     shell.closeDrawer();
   };
@@ -234,26 +260,36 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     onImportTemplate: templates.importTemplates,
     onLogout: logout,
     message: messages.openMessage,
+    loading: messages.messageLoading,
     accountName,
     accountEmail: user.email,
     onBack: closeReader,
     onCompose: () => {
+      if (view === 'drafts' && messageId) {
+        composeWindows.openDraft(messageId);
+
+        return;
+      }
       const message = messages.openMessage;
       const to =
         message && message.direction === 'inbound'
           ? message.from_address
           : (message?.to_address ?? '');
 
-      compose.openCompose(view === 'drafts' ? '' : to);
+      composeWindows.openNew(to);
     },
     onDiscard: () => {
-      if (messageId) {
-        messages.discardDraft(messageId);
+      const message = messages.openMessage;
+
+      if (message) {
+        messages.discardDraft(message.id);
       }
     },
     onDownload: () => {
-      if (messageId) {
-        messages.downloadMessage(messageId);
+      const message = messages.openMessage;
+
+      if (message) {
+        messages.downloadMessage(message.id);
       }
     },
     onSaveTemplate: () => {
@@ -262,13 +298,17 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
       }
     },
     onMove: mailbox => {
-      if (messageId) {
-        messages.moveMessage(messageId, mailbox);
+      const message = messages.openMessage;
+
+      if (message) {
+        messages.moveMessage(message.id, mailbox);
       }
     },
     onPurge: () => {
-      if (messageId) {
-        messages.purgeMessage(messageId);
+      const message = messages.openMessage;
+
+      if (message) {
+        messages.purgeMessage(message.id);
       }
     },
   };
@@ -290,7 +330,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
                 state: { pfOpen: true },
               })
             }
-            onEdit={templates.openTemplate}
+            onEdit={id => composeWindows.openTemplate(id)}
             onDelete={templates.removeTemplate}
             onBack={closeReader}
             collapsed={shell.sidebarCollapsed}
@@ -338,44 +378,186 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
         shell.closeDrawer();
         navigate(`/${next}`);
       }}
-      onCompose={() => compose.openCompose()}
+      onCompose={() => {
+        shell.closeDrawer();
+        composeWindows.openNew();
+      }}
       onImportEmail={messages.importMessages}
       onImportTemplate={templates.importTemplates}
       onOpenSettings={openSettings}
       onLogout={logout}
     >
       {panel}
-      {compose.composing && (
-        <Compose
-          title={t(
-            view === 'drafts' && messageId ? 'app.editDraft' : 'app.newMessage',
+      {composeWindows.windows.map(info => {
+        const minimized = composeWindows.windows.filter(
+          window => window.minimized,
+        );
+
+        if (info.kind === 'template') {
+          return (
+            <TemplateWindow
+              key={info.id}
+              info={info}
+              template={
+                templates.templates.find(
+                  template => template.id === info.templateId,
+                ) ?? null
+              }
+              fullscreen={info.fullscreen}
+              dockIndex={minimized.findIndex(window => window.id === info.id)}
+              userId={user.id}
+              onClose={composeWindows.closeWindow}
+              onMinimize={composeWindows.minimize}
+              onRestore={composeWindows.restoreWindow}
+              onToggleFullscreen={composeWindows.toggleFullscreen}
+              onFocus={composeWindows.focusWindow}
+              onMove={composeWindows.moveWindow}
+              onRegisterSave={composeWindows.registerSave}
+              onUnregisterSave={composeWindows.unregisterSave}
+              onDirtyChange={composeWindows.setWindowDirty}
+              onCreated={id => navigate(`/templates/${id}`, { replace: true })}
+              onDeleted={() => {
+                const current = routeRef.current;
+
+                if (
+                  current.view === 'templates' &&
+                  (current.messageId === null ||
+                    current.messageId === info.templateId)
+                ) {
+                  navigate(viewPath('templates', null, current.q), {
+                    replace: true,
+                  });
+                }
+              }}
+              askConfirm={confirm.askConfirm}
+              refreshTemplates={templates.refreshTemplates}
+            />
+          );
+        }
+
+        return (
+          <ComposeWindow
+            key={info.id}
+            info={info}
+            fullscreen={info.fullscreen}
+            dockIndex={minimized.findIndex(window => window.id === info.id)}
+            userId={user.id}
+            askConfirm={confirm.askConfirm}
+            onDraftId={composeWindows.registerDraftId}
+            onClose={composeWindows.closeWindow}
+            onMinimize={composeWindows.minimize}
+            onRestore={composeWindows.restoreWindow}
+            onToggleFullscreen={composeWindows.toggleFullscreen}
+            onFocus={composeWindows.focusWindow}
+            onMove={composeWindows.moveWindow}
+            onRegisterSave={composeWindows.registerSave}
+            onUnregisterSave={composeWindows.unregisterSave}
+            onDirtyChange={composeWindows.setWindowDirty}
+            refreshList={messages.refreshList}
+            refreshCounts={messages.refreshCounts}
+            syncOpenMessage={messages.syncOpenMessage}
+          />
+        );
+      })}
+      {logoutPrompt && (
+        <Modal
+          title={auth.logoutBusy ? t('app.signingOut') : t('app.unsavedTitle')}
+          onDismiss={logoutBlocked ? undefined : () => setLogoutPrompt(false)}
+          footer={
+            auth.logoutBusy ? null : (
+              <>
+                <Button
+                  disabled={logoutBusy}
+                  onClick={() => setLogoutPrompt(false)}
+                >
+                  {t('ui.cancel')}
+                </Button>
+                <Button
+                  disabled={logoutBusy}
+                  variant="danger"
+                  onClick={() => {
+                    if (logoutBlocked) {
+                      return;
+                    }
+                    setLogoutBusy(true);
+                    setLogoutError('');
+
+                    auth
+                      .logout()
+                      .then(ok => {
+                        setLogoutBusy(false);
+
+                        if (!ok) {
+                          setLogoutError(t('app.logoutFailed'));
+
+                          return;
+                        }
+                        setLogoutPrompt(false);
+                        shell.closeDrawer();
+                      })
+                      .catch(() => {
+                        setLogoutBusy(false);
+                        setLogoutError(t('app.logoutFailed'));
+                      });
+                  }}
+                >
+                  {t('app.discardAndLogout')}
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={logoutBusy}
+                  onClick={() => {
+                    if (logoutBlocked) {
+                      return;
+                    }
+                    setLogoutBusy(true);
+                    setLogoutError('');
+
+                    composeWindows
+                      .saveAll()
+                      .then(async saved => {
+                        if (!saved) {
+                          setLogoutBusy(false);
+                          setLogoutError(t('compose.saveFailed'));
+
+                          return;
+                        }
+                        const ok = await auth.logout();
+
+                        setLogoutBusy(false);
+
+                        if (!ok) {
+                          setLogoutError(t('app.logoutFailed'));
+
+                          return;
+                        }
+                        setLogoutPrompt(false);
+                        shell.closeDrawer();
+                      })
+                      .catch(() => {
+                        setLogoutBusy(false);
+                        setLogoutError(t('compose.saveFailed'));
+                      });
+                  }}
+                >
+                  {logoutBusy ? t('compose.saving') : t('app.saveAndLogout')}
+                </Button>
+              </>
+            )
+          }
+        >
+          {auth.logoutBusy ? (
+            <p>{t('app.signingOutHint')}</p>
+          ) : (
+            <p>{t('app.unsavedBody')}</p>
           )}
-          to={compose.composeTo}
-          subject={compose.composeSubject}
-          text={compose.composeText}
-          source={compose.composeSource}
-          html={compose.composeHtml}
-          busy={compose.composeBusy}
-          status={compose.composeStatus}
-          onToChange={compose.setComposeTo}
-          onSubjectChange={compose.setComposeSubject}
-          onContentChange={compose.updateComposeContent}
-          onSend={compose.sendCompose}
-          onDismiss={() => {
-            compose.flushDraft();
-            closeCompose();
-          }}
-        />
+          {logoutError && <p role="alert">{logoutError}</p>}
+        </Modal>
       )}
-      {templates.editing && (
-        <TemplateDialog
-          draft={templates.editing}
-          saving={templates.saving}
-          onChange={templates.setEditing}
-          onSave={templates.saveTemplate}
-          onImportFile={templates.importTemplateFile}
-          onDismiss={closeTemplate}
-        />
+      {auth.logoutBusy && !logoutPrompt && (
+        <Modal title={t('app.signingOut')} size="sm">
+          <p>{t('app.signingOutHint')}</p>
+        </Modal>
       )}
       {settingsOpen && (
         <Settings

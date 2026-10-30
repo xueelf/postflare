@@ -20,8 +20,8 @@ export interface MailRoute {
   view: View;
   messageId: string | null;
   q: string;
-  compose: boolean;
-  template: boolean;
+  hash: string;
+  state: unknown;
   path: string;
 }
 
@@ -45,14 +45,6 @@ export function parseRoute(pathname: string): RouteState {
     return { view: 'users', messageId: null };
   }
   return { view: 'inbox', messageId: null };
-}
-
-/**
- * 弹窗片段只保留一级，弹窗内部的层级不进地址：
- * #template 是模板弹窗，#settings 是设置弹窗。
- */
-export function isTemplateDialog(hash: string): boolean {
-  return hash === '#template';
 }
 
 export function isSettingsDialog(hash: string): boolean {
