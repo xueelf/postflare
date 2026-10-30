@@ -1,15 +1,32 @@
-import {
-  type AttachmentRow,
-  extractAttachmentIds,
-  replaceCidImages,
-} from './attachments';
+import { extractAttachmentIds } from '#/attachment-url';
+import { MAIL_RETENTION_DAYS } from '#/limits';
+
+import { type AttachmentRow, replaceCidImages } from './attachments';
 import { chunks, DB_PARAM_LIMIT, deleteObjects } from './batch';
-import { badRequest, notFound, readJson } from './http';
+import { badRequest, jsonError, notFound, readJson } from './http';
 
 const LIST_PAGE_SIZE = 30;
 const MAILBOXES = ['inbox', 'sent', 'drafts', 'spam', 'trash'];
 const MOVE_TARGETS = ['inbox', 'sent', 'spam', 'trash'];
 const EMPTY_TARGETS = ['spam', 'trash'];
+
+function allowedMoves(current: {
+  mailbox: string;
+  direction: 'inbound' | 'outbound';
+}): string[] {
+  switch (current.mailbox) {
+    case 'inbox':
+      return ['spam', 'trash'];
+    case 'spam':
+      return ['inbox', 'trash'];
+    case 'sent':
+      return ['trash'];
+    case 'trash':
+      return [current.direction === 'inbound' ? 'inbox' : 'sent'];
+    default:
+      return [];
+  }
+}
 
 interface MessageListRow {
   id: string;
@@ -129,11 +146,15 @@ interface MessageRow {
   updated_at: string;
 }
 
-export async function getMessage(
+export interface MessageDetailPayload extends MessageRow {
+  attachments: AttachmentRow[];
+}
+
+export async function messageDetail(
   env: Env,
   id: string,
   userId: string,
-): Promise<Response> {
+): Promise<MessageDetailPayload | null> {
   const message = await env.DB.prepare(
     `SELECT id, mailbox, direction, seen, from_address, from_name, to_address, subject,
             body_text, body_html, body_source, created_at, updated_at
@@ -144,7 +165,7 @@ export async function getMessage(
     .first<MessageRow>();
 
   if (!message) {
-    return notFound();
+    return null;
   }
 
   const { results: attachments } = await env.DB.prepare(
@@ -154,6 +175,16 @@ export async function getMessage(
   )
     .bind(id)
     .all<AttachmentRow & { content_id: string | null }>();
+
+  let bodySource = message.body_source;
+
+  if (message.direction === 'outbound' && bodySource === null) {
+    const source = await env.ATTACHMENTS.get(`source/${id}.inky`);
+
+    if (source) {
+      bodySource = await source.text();
+    }
+  }
 
   const bodyHtml =
     message.body_html === null
@@ -166,24 +197,32 @@ export async function getMessage(
     file => !file.content_id && !inlineIds.has(file.id),
   );
 
-  return Response.json({
+  return {
     ...message,
+    body_source: bodySource,
     body_html: bodyHtml,
     attachments: visibleAttachments.map(
       ({ content_id: _contentId, ...file }) => file,
     ),
-  });
+  };
+}
+
+export async function getMessage(
+  env: Env,
+  id: string,
+  userId: string,
+): Promise<Response> {
+  const detail = await messageDetail(env, id, userId);
+
+  if (!detail) {
+    return notFound();
+  }
+
+  return Response.json(detail);
 }
 
 interface DownloadRow {
-  from_address: string;
-  from_name: string;
-  to_address: string;
   subject: string;
-  body_text: string | null;
-  body_html: string | null;
-  message_id: string | null;
-  created_at: string;
   raw_storage_key: string | null;
 }
 
@@ -204,85 +243,8 @@ function buildEmlFilename(subject: string, id: string): string {
   return `${cleaned || id}.eml`;
 }
 
-/** 非 ASCII 的头按 RFC 2047 编码，纯 ASCII 原样返回 */
-function encodeHeader(value: string): string {
-  if (/^[\x20-\x7e]*$/.test(value)) {
-    return value;
-  }
-
-  const bytes = new TextEncoder().encode(value);
-
-  let binary = '';
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return `=?UTF-8?B?${btoa(binary)}?=`;
-}
-
-/** UTF-8 文本转 base64，按 MIME 要求每 76 字符折行 */
-function encodeBase64(text: string): string {
-  const bytes = new TextEncoder().encode(text);
-
-  let binary = '';
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return btoa(binary).replace(/.{76}(?=.)/g, '$&\r\n');
-}
-
 /**
- * 发件没有存原文，用库里的头与正文拼一封 eml，内容与发出的一致。
- */
-function buildEml(message: DownloadRow): string {
-  const boundary = `postflare-${crypto.randomUUID()}`;
-  const from = message.from_name
-    ? `${encodeHeader(message.from_name)} <${message.from_address}>`
-    : message.from_address;
-  const domain = message.from_address.split('@')[1] ?? 'localhost';
-  const date = new Date(`${message.created_at.replace(' ', 'T')}Z`);
-  const lines = [
-    `From: ${from}`,
-    `To: ${message.to_address}`,
-    `Subject: ${encodeHeader(message.subject)}`,
-    `Date: ${date.toUTCString()}`,
-    `Message-ID: <${message.message_id ?? `${crypto.randomUUID()}@${domain}`}>`,
-    'MIME-Version: 1.0',
-  ];
-
-  if (message.body_html) {
-    lines.push(
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      '',
-      `--${boundary}`,
-      'Content-Type: text/plain; charset=utf-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      encodeBase64(message.body_text ?? ''),
-      `--${boundary}`,
-      'Content-Type: text/html; charset=utf-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      encodeBase64(message.body_html),
-      `--${boundary}--`,
-    );
-  } else {
-    lines.push(
-      'Content-Type: text/plain; charset=utf-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      encodeBase64(message.body_text ?? ''),
-    );
-  }
-
-  return lines.join('\r\n');
-}
-
-/**
- * 下载邮件：收到时存了原文就给原文，发件用拼出来的那封。
+ * 下载邮件：所有可下载的邮件都在收信或发信时保存了原文。
  */
 export async function downloadMessage(
   env: Env,
@@ -290,8 +252,7 @@ export async function downloadMessage(
   userId: string,
 ): Promise<Response> {
   const message = await env.DB.prepare(
-    `SELECT from_address, from_name, to_address, subject,
-            body_text, body_html, message_id, created_at, raw_storage_key
+    `SELECT subject, raw_storage_key
      FROM messages
      WHERE id = ? AND user_id = ?`,
   )
@@ -308,16 +269,17 @@ export async function downloadMessage(
     ? await env.ATTACHMENTS.get(message.raw_storage_key)
     : null;
 
+  if (!raw) {
+    return notFound();
+  }
+
   // 同 inbound，workers-types 与 DOM 库声明的 ReadableStream 类型不同，运行时一致
-  return new Response(
-    raw ? (raw.body as unknown as BodyInit) : buildEml(message),
-    {
-      headers: {
-        'Content-Type': 'message/rfc822',
-        'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      },
+  return new Response(raw.body as unknown as BodyInit, {
+    headers: {
+      'Content-Type': 'message/rfc822',
+      'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     },
-  );
+  });
 }
 
 export async function updateMessage(
@@ -351,6 +313,20 @@ export async function updateMessage(
     return badRequest('invalid mailbox');
   }
 
+  const current = await env.DB.prepare(
+    'SELECT mailbox, direction FROM messages WHERE id = ? AND user_id = ?',
+  )
+    .bind(id, userId)
+    .first<{ mailbox: string; direction: 'inbound' | 'outbound' }>();
+
+  if (!current) {
+    return notFound();
+  }
+
+  if (mailbox !== undefined && !allowedMoves(current).includes(mailbox)) {
+    return badRequest('invalid mailbox transition');
+  }
+
   const fields: string[] = [];
   const values: Array<string | number> = [];
 
@@ -364,14 +340,29 @@ export async function updateMessage(
     values.push(mailbox);
   }
 
+  const currentFilter =
+    mailbox === undefined ? '' : ' AND mailbox = ? AND direction = ?';
+  // 回收站与垃圾邮件的 30 天期限同时约束定时清理和移出操作
+  const restore =
+    mailbox !== undefined &&
+    (current.mailbox === 'trash' || current.mailbox === 'spam');
+  const retentionFilter = restore
+    ? ` AND updated_at >= datetime('now', '-${MAIL_RETENTION_DAYS} days')`
+    : '';
   const updated = await env.DB.prepare(
-    `UPDATE messages SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`,
+    `UPDATE messages SET ${fields.join(', ')}
+     WHERE id = ? AND user_id = ?${currentFilter}${retentionFilter}`,
   )
-    .bind(...values, id, userId)
+    .bind(
+      ...values,
+      id,
+      userId,
+      ...(mailbox === undefined ? [] : [current.mailbox, current.direction]),
+    )
     .run();
 
   if (updated.meta.changes === 0) {
-    return notFound();
+    return restore ? jsonError('message expired', 410) : notFound();
   }
 
   return Response.json({ ok: true });
@@ -402,6 +393,7 @@ export async function purgeMessages(env: Env, ids: string[]): Promise<number> {
       ...messages.flatMap(row =>
         row.raw_storage_key ? [row.raw_storage_key] : [],
       ),
+      ...batch.map(id => `source/${id}.inky`),
     );
   }
 
@@ -512,7 +504,7 @@ export async function purgeExpired(env: Env): Promise<number> {
   const { results } = await env.DB.prepare(
     `SELECT id FROM messages
      WHERE mailbox IN ('spam', 'trash')
-       AND updated_at < datetime('now', '-30 days')`,
+       AND updated_at < datetime('now', '-${MAIL_RETENTION_DAYS} days')`,
   ).all<{ id: string }>();
 
   return purgeMessages(
