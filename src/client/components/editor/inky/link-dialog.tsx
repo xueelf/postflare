@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 
 import { Button } from '#/client/components/button';
+import { FormItem } from '#/client/components/form-item';
 import { Modal } from '#/client/components/modal';
 import { useI18n } from '#/client/i18n';
 
@@ -62,27 +63,23 @@ export function LinkDialog({
         </>
       }
     >
-      <div className="inky-link-dialog">
-        <label className="inky-link-field">
-          <span>{t('compose.linkText')}</span>
-          <input
-            ref={textRef}
-            value={text}
-            onChange={event => setText(event.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-        </label>
-        <label className="inky-link-field">
-          <span>{t('compose.linkUrl')}</span>
-          <input
-            value={url}
-            onChange={event => setUrl(event.target.value)}
-            onKeyDown={handleKeyDown}
-            inputMode="url"
-            placeholder="https://"
-          />
-        </label>
-      </div>
+      <FormItem label={t('compose.linkText')}>
+        <input
+          ref={textRef}
+          value={text}
+          onChange={event => setText(event.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+      </FormItem>
+      <FormItem label={t('compose.linkUrl')}>
+        <input
+          value={url}
+          onChange={event => setUrl(event.target.value)}
+          onKeyDown={handleKeyDown}
+          inputMode="url"
+          placeholder="https://"
+        />
+      </FormItem>
     </Modal>
   );
 }
