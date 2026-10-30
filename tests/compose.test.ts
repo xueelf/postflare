@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { parseRecipients, validRecipients } from '#/worker/compose';
+import { parseRecipients, validRecipients } from '#/recipients';
 
 test('parseRecipients 忽略空白项', () => {
   expect(parseRecipients('a@b.c, , d@e.f ')).toEqual(['a@b.c', 'd@e.f']);
