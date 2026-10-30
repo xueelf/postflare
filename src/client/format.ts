@@ -93,12 +93,3 @@ export function displayName(user: { name: string; email: string }): string {
 /**
  * 文件或 Blob 转 data URL。
  */
-export function readAsDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('failed to read the file'));
-    reader.readAsDataURL(blob);
-  });
-}
