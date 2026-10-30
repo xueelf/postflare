@@ -1,11 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import {
-  isSettingsDialog,
-  isTemplateDialog,
-  parseRoute,
-  viewPath,
-} from '#/client/route';
+import { isSettingsDialog, parseRoute, viewPath } from '#/client/route';
 
 test('parseRoute 识别五个文件夹与其中的邮件', () => {
   expect(parseRoute('/inbox')).toEqual({ view: 'inbox', messageId: null });
@@ -38,12 +33,7 @@ test('parseRoute 按完整路径段匹配，无效路径回落收件箱', () => 
   expect(parseRoute('/')).toEqual({ view: 'inbox', messageId: null });
 });
 
-test('弹窗片段只认一级，内部层级不算打开', () => {
-  expect(isTemplateDialog('#template')).toBe(true);
-  expect(isTemplateDialog('#template/tpl-1')).toBe(false);
-  expect(isTemplateDialog('#compose')).toBe(false);
-  expect(isTemplateDialog('')).toBe(false);
-
+test('设置片段只认一级，内部层级不算打开', () => {
   expect(isSettingsDialog('#settings')).toBe(true);
   expect(isSettingsDialog('#settings/username')).toBe(false);
   expect(isSettingsDialog('#template')).toBe(false);
