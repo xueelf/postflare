@@ -1,10 +1,10 @@
 import PostalMime from 'postal-mime';
 
+import { INBOUND_MAX_BYTES } from '#/limits';
+
 import type { AuthUser } from './auth';
 import { badRequest } from './http';
 import { sqlDate, storeMessage } from './mail-store';
-
-const MAX_EML_BYTES = 25 * 1024 * 1024;
 
 interface ImportResult {
   imported: number;
@@ -49,7 +49,7 @@ export async function importMessages(
       continue;
     }
 
-    if (file.size > MAX_EML_BYTES) {
+    if (file.size > INBOUND_MAX_BYTES) {
       result.failed += 1;
       result.errors.push({ file: file.name, error: 'file too large' });
 
