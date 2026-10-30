@@ -1,11 +1,11 @@
 import type { Email } from 'postal-mime';
 
-import { normalizeContentId } from './attachments';
-import { isUniqueViolation } from './http';
-import { purgeMessages } from './messages';
+import { D1_MAX_ROW_BYTES } from '#/limits';
 
-// D1 单行上限 2MB，正文超限时按字节截断，完整原文仍在 R2
-export const BODY_MAX_BYTES = 900_000;
+import { normalizeContentId } from './attachments';
+import { deleteObjects } from './batch';
+import { isUniqueViolation } from './http';
+import { rowBudget, sqliteRowBytes } from './row-size';
 
 interface StoreMessageInput {
   env: Env;
@@ -58,43 +58,85 @@ export async function storeMessage({
   }
 
   const rawKey = `raw/${id}.eml`;
+  const inReplyTo = normalizeMessageId(parsed.inReplyTo);
+  const encoder = new TextEncoder();
+  const updatedAt = sqlDate(undefined);
+  // 列顺序与 messages 表一致，预算与插入共用同一份数据
+  const rowValues: Array<string | number | null> = [
+    id,
+    userId,
+    mailbox,
+    direction,
+    seen,
+    from,
+    fromName,
+    to,
+    subject,
+    '',
+    '',
+    null,
+    messageId ?? null,
+    inReplyTo ?? null,
+    parsed.references ?? null,
+    rawKey,
+    createdAt,
+    updatedAt,
+  ];
+  const available = rowBudget(rowValues);
+  const text = parsed.text ?? null;
+  const html = parsed.html ?? null;
+  const textBytes = text === null ? 0 : encoder.encode(text).length;
+  const htmlBytes = html === null ? 0 : encoder.encode(html).length;
+  const totalBytes = textBytes + htmlBytes;
 
-  try {
-    await env.DB.prepare(
-      `INSERT INTO messages (
-         id, user_id, mailbox, direction, seen, from_address, from_name,
-         to_address, subject, body_text, body_html, message_id, in_reply_to,
-         "references", raw_storage_key, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        id,
-        userId,
-        mailbox,
-        direction,
-        seen,
-        from,
-        fromName,
-        to,
-        subject,
-        capBody(parsed.text ?? null, '(message truncated)'),
-        capBody(parsed.html ?? null, '<p>(message truncated)</p>'),
-        messageId,
-        normalizeMessageId(parsed.inReplyTo),
-        parsed.references ?? null,
-        rawKey,
-        createdAt,
-      )
-      .run();
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      return null;
-    }
-    throw error;
+  let textBudget: number;
+  let htmlBudget: number;
+
+  if (totalBytes <= available) {
+    textBudget = textBytes;
+    htmlBudget = htmlBytes;
+  } else {
+    textBudget = Math.floor((available * textBytes) / totalBytes);
+    htmlBudget = available - textBudget;
   }
 
+  let textValue = capBody(text, '(message truncated)', textBudget);
+  let htmlValue = capBody(html, '<p>(message truncated)</p>', htmlBudget);
+
+  // 截断后按实际记录长度复核，补上正文 serial type 变长带来的头部开销
+  for (;;) {
+    rowValues[9] = textValue;
+    rowValues[10] = htmlValue;
+
+    const over = sqliteRowBytes(rowValues) - D1_MAX_ROW_BYTES;
+
+    if (over <= 0 || (textBudget === 0 && htmlBudget === 0)) {
+      break;
+    }
+
+    if (textBudget >= htmlBudget) {
+      textBudget = Math.max(0, textBudget - over);
+    } else {
+      htmlBudget = Math.max(0, htmlBudget - over);
+    }
+    textValue = capBody(text, '(message truncated)', textBudget);
+    htmlValue = capBody(html, '<p>(message truncated)</p>', htmlBudget);
+  }
+
+  const writtenKeys: string[] = [];
+  const attachmentRows: Array<{
+    id: string;
+    filename: string;
+    contentType: string;
+    contentId: string | null;
+    size: number;
+    storageKey: string;
+  }> = [];
+
   try {
+    // 先把本次对象全部写入 R2，失败时数据库还没有可见记录
     await env.ATTACHMENTS.put(rawKey, raw);
+    writtenKeys.push(rawKey);
 
     for (const attachment of parsed.attachments) {
       const attachmentId = crypto.randomUUID();
@@ -106,27 +148,61 @@ export async function storeMessage({
           : normalizeContentId(attachment.contentId);
 
       await env.ATTACHMENTS.put(storageKey, content);
+      writtenKeys.push(storageKey);
 
-      await env.DB.prepare(
+      attachmentRows.push({
+        id: attachmentId,
+        filename: attachment.filename ?? 'attachment',
+        contentType: attachment.mimeType,
+        contentId,
+        size: content.byteLength,
+        storageKey,
+      });
+    }
+  } catch (error) {
+    await deleteObjects(env, writtenKeys).catch(cleanupError => {
+      console.error('failed to delete partial message objects', cleanupError);
+    });
+
+    throw error;
+  }
+
+  const statements = [
+    env.DB.prepare(
+      `INSERT INTO messages (
+         id, user_id, mailbox, direction, seen, from_address, from_name,
+         to_address, subject, body_text, body_html, body_source, message_id,
+         in_reply_to, "references", raw_storage_key, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(...rowValues),
+    ...attachmentRows.map(attachment =>
+      env.DB.prepare(
         `INSERT INTO attachments (
            id, message_id, filename, content_type, content_id, size_bytes, storage_key
          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-        .bind(
-          attachmentId,
-          id,
-          attachment.filename ?? 'attachment',
-          attachment.mimeType,
-          contentId,
-          content.byteLength,
-          storageKey,
-        )
-        .run();
-    }
-  } catch (error) {
-    // 附件没写完就把这封邮件撤掉，避免留下半封邮件
-    await purgeMessages(env, [id]);
+      ).bind(
+        attachment.id,
+        id,
+        attachment.filename,
+        attachment.contentType,
+        attachment.contentId,
+        attachment.size,
+        attachment.storageKey,
+      ),
+    ),
+  ];
 
+  try {
+    // 邮件与附件元数据同批提交，成功后才出现可去重的邮件记录
+    await env.DB.batch(statements);
+  } catch (error) {
+    await deleteObjects(env, writtenKeys).catch(cleanupError => {
+      console.error('failed to delete partial message objects', cleanupError);
+    });
+
+    if (isUniqueViolation(error)) {
+      return null;
+    }
     throw error;
   }
 
@@ -147,28 +223,50 @@ export function normalizeMessageId(
 /**
  * 正文按字节上限截断，超限时补一句说明，避免超过 D1 单行上限。
  */
-export function capBody(value: string | null, notice: string): string | null {
+export function capBody(
+  value: string | null,
+  notice: string,
+  budget: number,
+): string | null {
   if (value === null) {
     return null;
   }
   const encoder = new TextEncoder();
   const size = encoder.encode(value).length;
 
-  if (size <= BODY_MAX_BYTES) {
+  if (size <= budget) {
     return value;
   }
+  const noticeBytes = encoder.encode(notice).length;
 
-  const budget = BODY_MAX_BYTES - encoder.encode(notice).length;
-
-  let end = Math.floor((value.length * budget) / size);
-  let head = value.slice(0, end);
-
-  // 按字节比例粗切后再收窄，避免多字节字符让实际长度超标
-  while (end > 0 && encoder.encode(head).length > budget) {
-    end = Math.floor(end * 0.9);
-    head = value.slice(0, end);
+  if (budget <= noticeBytes) {
+    return '';
   }
-  return head + notice;
+
+  const contentBudget = budget - noticeBytes;
+
+  let bytes = 0;
+  let end = 0;
+
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    const width =
+      codePoint <= 0x7f
+        ? 1
+        : codePoint <= 0x7ff
+          ? 2
+          : codePoint <= 0xffff
+            ? 3
+            : 4;
+
+    if (bytes + width > contentBudget) {
+      break;
+    }
+    bytes += width;
+    end += character.length;
+  }
+
+  return value.slice(0, end) + notice;
 }
 
 export function sqlDate(value: string | undefined): string {
