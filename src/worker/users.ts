@@ -399,6 +399,7 @@ async function activateInvite(
 
   const id = crypto.randomUUID();
   const email = `${username}@${domain}`;
+  const passwordHash = await hashPassword(password);
   const now = new Date().toISOString();
 
   try {
@@ -412,15 +413,7 @@ async function activateInvite(
            WHERE token_hash = ? AND user_id IS NULL
              AND used_count < max_uses AND expires_at > ?
          )`,
-      ).bind(
-        id,
-        email,
-        name,
-        await hashPassword(password),
-        language,
-        tokenHash,
-        now,
-      ),
+      ).bind(id, email, name, passwordHash, language, tokenHash, now),
       env.DB.prepare(
         `UPDATE user_tokens SET used_count = used_count + 1
          WHERE token_hash = ? AND user_id IS NULL
@@ -438,7 +431,7 @@ async function activateInvite(
     throw error;
   }
 
-  return loginWithSession(env, id);
+  return loginWithSession(env, id, passwordHash);
 }
 
 async function resetPassword(
@@ -447,32 +440,47 @@ async function resetPassword(
   tokenHash: string,
   password: string,
 ): Promise<Response> {
-  // 条件删除当作闸门，并发兑换同一个令牌时只有一个能删到行
-  const claimed = await env.DB.prepare(
-    'DELETE FROM user_tokens WHERE token_hash = ?',
-  )
-    .bind(tokenHash)
-    .run();
+  const now = new Date().toISOString();
+  const passwordHash = await hashPassword(password);
+  const results = await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE users SET password_hash = ?
+       WHERE id = ? AND EXISTS (
+         SELECT 1 FROM user_tokens
+         WHERE token_hash = ? AND user_id = ? AND expires_at > ?
+       )`,
+    ).bind(passwordHash, userId, tokenHash, userId, now),
+    env.DB.prepare(
+      `DELETE FROM sessions
+       WHERE user_id = ? AND EXISTS (
+         SELECT 1 FROM user_tokens
+         WHERE token_hash = ? AND user_id = ? AND expires_at > ?
+       )`,
+    ).bind(userId, tokenHash, userId, now),
+    env.DB.prepare('DELETE FROM user_tokens WHERE token_hash = ?').bind(
+      tokenHash,
+    ),
+  ]);
 
-  if (claimed.meta.changes !== 1) {
+  if (results[0]?.meta.changes !== 1) {
     return jsonError('link is invalid or expired', 410);
   }
 
-  await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
-    .bind(await hashPassword(password), userId)
-    .run();
-
-  // 设置新密码后作废该账号已有会话
-  await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?')
-    .bind(userId)
-    .run();
-
-  return loginWithSession(env, userId);
+  return loginWithSession(env, userId, passwordHash);
 }
 
 // 签发会话并把用户资料返回给客户端
-async function loginWithSession(env: Env, userId: string): Promise<Response> {
-  const sessionToken = await createSession(env, userId);
+async function loginWithSession(
+  env: Env,
+  userId: string,
+  passwordHash: string,
+): Promise<Response> {
+  const sessionToken = await createSession(env, userId, passwordHash);
+
+  if (!sessionToken) {
+    return jsonError('link is invalid or expired', 410);
+  }
+
   const user = await env.DB.prepare(
     'SELECT id, email, name, language, role FROM users WHERE id = ?',
   )
@@ -483,6 +491,7 @@ async function loginWithSession(env: Env, userId: string): Promise<Response> {
     {
       user: user
         ? {
+            id: user.id,
             email: user.email,
             name: user.name,
             language: user.language,
