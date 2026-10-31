@@ -51,6 +51,7 @@
   --input-border-radius: var(--radius-control);
   --input-color: var(--text);
   --input-font-size: 14px;
+  --input-line-height: 22px;
   --input-padding: 8px 10px;
   --input-placeholder-color: var(--faint);
   --select-background-color: var(--surface);
@@ -214,7 +215,7 @@ hr {
   --input-background-color: transparent;
   --input-border-width: 0;
   --input-border-radius: 0;
-  --input-padding: 12px 0;
+  --input-padding: var(--compose-line-padding, 12px) 0;
   flex: none;
   border-bottom: 1px solid var(--line);
 }
@@ -226,9 +227,11 @@ hr {
 
 /* 全高表单：内容排在 body 的留白内，编辑器自己撑满剩余高度 */
 .compose-form {
+  --compose-line-padding: 12px;
   display: flex;
   flex: 1;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
 
