@@ -1,13 +1,13 @@
 import DOMPurify from 'dompurify';
 
+import { collectResourceUrls } from '#/attachment-url';
+
 const BASE_STYLE = `
 html { color-scheme: light; }
 a, a:visited { color: #2459c9; }
 `;
 
 const REMOTE_URL_RE = /^(?:https?:)?\/\//i;
-const CSS_REMOTE_RE =
-  /(?:url\(\s*['"]?|@import\s+(?:url\(\s*)?['"]?)(?:https?:)?\/\//i;
 
 const FORBIDDEN_TAGS = [
   'base',
@@ -72,45 +72,12 @@ function isRemoteUrl(value: string | null): boolean {
 
 /**
  * 只在正文真的引用了远程资源时提示，避免每封 HTML 邮件都出现入口。
+ * 普通超链接的 href 不算远程资源，避免出现无意义的加载入口。
  */
-function detectRemoteContent(doc: Document): boolean {
-  for (const element of doc.querySelectorAll(
-    '[src], [srcset], [poster], [background]',
-  )) {
-    if (
-      isRemoteUrl(element.getAttribute('src')) ||
-      isRemoteUrl(element.getAttribute('poster')) ||
-      isRemoteUrl(element.getAttribute('background'))
-    ) {
-      return true;
-    }
-
-    const srcset = element.getAttribute('srcset');
-
-    if (
-      srcset?.split(',').some(candidate => {
-        const url = candidate.trim().split(/\s+/)[0] ?? '';
-
-        return isRemoteUrl(url);
-      })
-    ) {
-      return true;
-    }
-  }
-
-  for (const element of doc.querySelectorAll('[style]')) {
-    if (CSS_REMOTE_RE.test(element.getAttribute('style') ?? '')) {
-      return true;
-    }
-  }
-
-  for (const element of doc.querySelectorAll('style')) {
-    if (CSS_REMOTE_RE.test(element.textContent ?? '')) {
-      return true;
-    }
-  }
-
-  return false;
+export function hasRemoteContent(html: string): boolean {
+  return collectResourceUrls(html, { includeHref: false }).some(ref =>
+    isRemoteUrl(ref.url),
+  );
 }
 
 /**
@@ -128,12 +95,12 @@ export function buildEmailDocument(
     node.setAttribute('rel', 'noopener noreferrer');
   });
 
-  // 与 Zero 一致：删除 1x1 和 0x0 追踪像素，避免允许远程内容后回传已读
+  // 只删除明确的 1x1 和 0x0 像素，减少允许远程内容后的已读回传，不能覆盖其它追踪方式
   doc
     .querySelectorAll('img[width="1"][height="1"], img[width="0"][height="0"]')
     .forEach(node => node.remove());
 
-  const hasRemoteContent = detectRemoteContent(doc);
+  const remoteContent = hasRemoteContent(doc.documentElement.outerHTML);
 
   const csp = doc.createElement('meta');
 
@@ -154,6 +121,6 @@ export function buildEmailDocument(
 
   return {
     html: `<!doctype html>${doc.documentElement.outerHTML}`,
-    hasRemoteContent,
+    hasRemoteContent: remoteContent,
   };
 }

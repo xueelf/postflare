@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router';
 
 import { apiFetch } from '#/client/api';
 import { useToast } from '#/client/components/toast';
-import { readAsDataUrl } from '#/client/format';
-import { useI18n } from '#/client/i18n';
+import { type MessageKey, useI18n } from '#/client/i18n';
 import { compileInky } from '#/client/inky';
 import { type MailRoute, viewPath } from '#/client/route';
+import { MAX_SUBJECT_LENGTH, MAX_TEMPLATE_BYTES } from '#/limits';
 
 import type { ConfirmRequest } from './use-confirm';
 
@@ -19,18 +19,11 @@ export interface Template {
   updated_at: string;
 }
 
-export interface TemplateDraft {
-  id: string;
-  name: string;
-  subject: string;
-  body_html: string;
-  body_source: string;
-}
-
 export interface TemplateDeps {
   navigate: NavigateFunction;
   closeDrawer: () => void;
   askConfirm: (request: ConfirmRequest) => void;
+  deleteTemplate: (id: string) => Promise<Response | null>;
 }
 
 interface MessageTemplateSource {
@@ -39,131 +32,90 @@ interface MessageTemplateSource {
   body_source: string | null;
 }
 
-const ATTACHMENT_URL_RE = /\/api\/attachments\/([\w-]+)/g;
+// 服务端错误码 → 文案键
+const TEMPLATE_ERRORS: Record<string, MessageKey> = {
+  'attachment not found': 'templates.attachmentMissing',
+  'subject too long': 'compose.errorSubjectTooLong',
+  'template too large': 'templates.tooLarge',
+};
 
 function templateName(file: File): string {
   return file.name.replace(/\.inky$/i, '').trim();
 }
 
-function draftOf(template: Template): TemplateDraft {
-  return {
-    id: template.id,
-    name: template.name,
-    subject: template.subject,
-    body_html: template.body_html,
-    body_source: template.body_source,
-  };
+function templatePayload(
+  name: string,
+  subject: string,
+  bodyHtml: string,
+  bodySource: string,
+): string {
+  return JSON.stringify({
+    name,
+    subject,
+    body_html: bodyHtml,
+    body_source: bodySource,
+  });
 }
 
 /**
- * 模板：列表、导入、另存为、编辑与删除。
- * 新建模板由 .inky 导入或阅读器另存为产生，不再提供空白模板弹窗。
+ * 模板列表、导入、另存为与删除。模板编辑窗口使用自己的 Hook。
  */
 export function useTemplates(
   route: MailRoute,
   ready: boolean,
   deps: TemplateDeps,
 ) {
-  const { navigate, closeDrawer, askConfirm } = deps;
+  const { navigate, closeDrawer, askConfirm, deleteTemplate } = deps;
 
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [editing, setEditing] = useState<TemplateDraft | null>(null);
-  const [saving, setSaving] = useState(false);
   const toast = useToast();
   const { t } = useI18n();
+  const disposedRef = useRef(false);
+  const abortRef = useRef(new AbortController());
+  const routeRef = useRef(route);
+
+  routeRef.current = route;
+
+  useEffect(() => {
+    return () => {
+      disposedRef.current = true;
+      abortRef.current.abort();
+    };
+  }, []);
+
+  const templateError = (error: string | undefined, status: number) => {
+    const key = error ? TEMPLATE_ERRORS[error] : undefined;
+
+    return key ? t(key) : t('templates.saveFailed', { status });
+  };
 
   const refreshTemplates = () =>
     apiFetch('/api/templates')
-      .then(res => res.json<Template[]>())
-      .then(data => {
-        setTemplates(data);
-        setLoaded(true);
+      .then(async res => {
+        if (!res.ok) {
+          toast.error(t('common.loadFailed'));
+
+          return;
+        }
+        const data = await res.json<Template[]>();
+
+        if (!disposedRef.current) {
+          setTemplates(data);
+        }
       })
       .catch(() => {});
 
   useEffect(() => {
-    if (!ready) {
-      return;
+    if (ready) {
+      refreshTemplates();
     }
-    refreshTemplates();
   }, [ready]);
 
-  // 模板弹窗由片段驱动，编辑哪一份留在状态里，刷新时回落到路由上打开的那份
-  useEffect(() => {
-    if (!ready) {
-      return;
-    }
-
-    if (!route.template) {
-      setEditing(null);
-
-      return;
-    }
-    setEditing(current => {
-      if (current) {
-        return current;
-      }
-
-      if (!route.messageId) {
-        return null;
-      }
-      const found = templates.find(item => item.id === route.messageId);
-
-      if (found) {
-        return draftOf(found);
-      }
-      // 列表还没到就再等一轮
-      return loaded ? null : current;
-    });
-  }, [ready, loaded, route.template, route.messageId, templates]);
-
-  const openTemplate = (id: string) => {
-    closeDrawer();
-
-    const found = templates.find(item => item.id === id);
-
-    if (!found) {
-      return;
-    }
-    setEditing(draftOf(found));
-    navigate(`${route.path}#template`, { state: { pfTemplate: true } });
-  };
-
-  // 另存为模板时把消息内联图片复制成模板自己的图片，避免原邮件删除后裂图
-  const inlineAttachmentImages = async (htmls: string[]): Promise<string[]> => {
-    const ids = [
-      ...new Set(
-        htmls.flatMap(html =>
-          [...html.matchAll(ATTACHMENT_URL_RE)]
-            .map(match => match[1])
-            .filter((id): id is string => Boolean(id)),
-        ),
-      ),
-    ];
-
-    if (ids.length === 0) {
-      return htmls;
-    }
-    const replacements = new Map<string, string>();
-
-    for (const id of ids) {
-      const response = await apiFetch(`/api/attachments/${id}`);
-
-      if (!response.ok) {
-        throw new Error(t('templates.saveFailedRetry'));
-      }
-      replacements.set(id, await readAsDataUrl(await response.blob()));
-    }
-    return htmls.map(html =>
-      html.replace(
-        ATTACHMENT_URL_RE,
-        (match, id: string) => replacements.get(id) ?? match,
-      ),
-    );
-  };
-
   const loadTemplate = async (file: File) => {
+    if (file.size > MAX_TEMPLATE_BYTES) {
+      throw new Error(t('templates.tooLarge'));
+    }
+
     const source = await file.text();
 
     return {
@@ -183,8 +135,16 @@ export function useTemplates(
       let error = '';
 
       for (const file of files) {
+        if (disposedRef.current) {
+          return;
+        }
+
         try {
           const { name, html } = await loadTemplate(file);
+
+          if (disposedRef.current) {
+            return;
+          }
           const form = new FormData();
 
           form.append('file', file);
@@ -194,21 +154,26 @@ export function useTemplates(
           const response = await apiFetch('/api/templates/import', {
             method: 'POST',
             body: form,
+            signal: abortRef.current.signal,
           });
+
+          if (disposedRef.current) {
+            return;
+          }
 
           if (!response.ok) {
             const data = (await response.json()) as { error?: string };
 
-            throw new Error(
-              data.error ??
-                t('templates.saveFailed', { status: response.status }),
-            );
+            throw new Error(templateError(data.error, response.status));
           }
           const data = (await response.json()) as { id: string };
 
           imported += 1;
           firstId ||= data.id;
         } catch (cause) {
+          if (disposedRef.current) {
+            return;
+          }
           failed += 1;
 
           error =
@@ -216,6 +181,10 @@ export function useTemplates(
               ? cause.message
               : t('templates.saveFailedRetry');
         }
+      }
+
+      if (disposedRef.current) {
+        return;
       }
 
       if (imported === 0) {
@@ -226,6 +195,10 @@ export function useTemplates(
 
       await refreshTemplates();
 
+      if (disposedRef.current) {
+        return;
+      }
+
       if (failed > 0) {
         toast.info(t('templates.importPartial', { imported, failed }));
       } else {
@@ -234,6 +207,10 @@ export function useTemplates(
             ? t('templates.imported')
             : t('templates.importedCount', { count: imported }),
         );
+      }
+
+      if (disposedRef.current) {
+        return;
       }
       navigate(`/templates/${firstId}`);
     })();
@@ -249,73 +226,48 @@ export function useTemplates(
 
       return;
     }
-    inlineAttachmentImages([body, source])
-      .then(async ([html = '', sourceHtml = '']) => {
-        const response = await apiFetch('/api/templates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: subject || t('templates.untitled'),
-            subject,
-            body_html: html,
-            body_source: sourceHtml,
-          }),
-        });
 
-        if (!response.ok) {
-          const data = (await response.json()) as { error?: string };
+    if (subject.length > MAX_SUBJECT_LENGTH) {
+      toast.error(t('compose.errorSubjectTooLong'));
 
-          throw new Error(
-            data.error ??
-              t('templates.saveFailed', { status: response.status }),
-          );
-        }
-        await refreshTemplates();
-        toast.success(t('templates.saved'));
-      })
-      .catch((error: Error) => {
-        toast.error(error.message);
-      });
-  };
-
-  const saveTemplate = () => {
-    if (!editing) {
       return;
     }
-    setSaving(true);
 
-    const run = (async () => {
-      const html = (await compileInky(editing.body_source)).html;
-      const res = await apiFetch(`/api/templates/${editing.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editing.name,
-          subject: editing.subject,
-          body_html: html,
-          body_source: editing.body_source,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-
-        toast.error(
-          data.error ?? t('templates.saveFailed', { status: res.status }),
-        );
-        setSaving(false);
-
+    (async () => {
+      if (disposedRef.current) {
         return;
       }
-      toast.success(t('templates.saved'));
-      setSaving(false);
-      navigate(route.path, { replace: true });
-      refreshTemplates();
-    })();
 
-    run.catch(() => {
-      toast.error(t('templates.saveFailedRetry'));
-      setSaving(false);
+      const response = await apiFetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: templatePayload(
+          subject || t('templates.untitled'),
+          subject,
+          body,
+          source,
+        ),
+        signal: abortRef.current.signal,
+      });
+
+      if (disposedRef.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+
+        throw new Error(templateError(data.error, response.status));
+      }
+      await refreshTemplates();
+
+      if (!disposedRef.current) {
+        toast.success(t('templates.saved'));
+      }
+    })().catch((error: Error) => {
+      if (!disposedRef.current) {
+        toast.error(error.message);
+      }
     });
   };
 
@@ -326,73 +278,57 @@ export function useTemplates(
       confirmText: t('templates.delete'),
       danger: true,
       action: () => {
-        apiFetch(`/api/templates/${id}`, { method: 'DELETE' })
+        if (disposedRef.current) {
+          return;
+        }
+        const context = routeRef.current;
+
+        deleteTemplate(id)
           .then(res => {
+            if (disposedRef.current) {
+              return;
+            }
+
+            if (!res) {
+              toast.error(t('compose.editingElsewhere'));
+
+              return;
+            }
+
             if (!res.ok) {
               toast.error(t('templates.deleteFailed', { status: res.status }));
 
               return;
             }
             toast.success(t('templates.deleted'));
-            navigate(viewPath('templates', null, route.q), { replace: true });
+
+            const current = routeRef.current;
+
+            if (
+              current.view === 'templates' &&
+              current.q === context.q &&
+              current.messageId === context.messageId
+            ) {
+              navigate(viewPath('templates', null, current.q), {
+                replace: true,
+              });
+            }
             refreshTemplates();
           })
           .catch(() => {
-            toast.error(t('templates.deleteFailedRetry'));
+            if (!disposedRef.current) {
+              toast.error(t('templates.deleteFailedRetry'));
+            }
           });
       },
     });
   };
 
-  // 编辑已有模板时用 .inky 源码覆盖正文
-  const importTemplateFile = (file: File) => {
-    loadTemplate(file)
-      .then(({ name, source, html }) => {
-        const apply = () =>
-          setEditing(current =>
-            current
-              ? {
-                  ...current,
-                  name: name || current.name,
-                  body_html: html,
-                  body_source: source,
-                }
-              : current,
-          );
-        const hasContent = Boolean(
-          editing?.name.trim() || editing?.body_source.trim(),
-        );
-
-        if (!hasContent) {
-          apply();
-
-          return;
-        }
-        askConfirm({
-          title: name
-            ? t('templates.importReplaceAll')
-            : t('templates.importReplaceBody'),
-          message: t('templates.importOverwrite'),
-          confirmText: t('templates.replace'),
-          danger: true,
-          action: apply,
-        });
-      })
-      .catch((error: Error) => {
-        toast.error(error.message);
-      });
-  };
-
   return {
     templates,
-    editing,
-    setEditing,
-    saving,
-    openTemplate,
+    refreshTemplates,
     importTemplates,
     saveMessageAsTemplate,
-    saveTemplate,
     removeTemplate,
-    importTemplateFile,
   };
 }
