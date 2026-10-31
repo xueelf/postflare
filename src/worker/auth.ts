@@ -25,7 +25,7 @@ export interface AuthUser {
   role: 'owner' | 'user';
 }
 
-type PublicUser = Omit<AuthUser, 'id'>;
+type PublicUser = AuthUser;
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 200;
@@ -37,15 +37,25 @@ const USERNAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
  * 用户名是邮箱地址 @ 前的部分，不允许出现 @。
  */
 export function validateUsername(value: string): string | null {
-  if (!value || value.includes('@') || !USERNAME_PATTERN.test(value)) {
+  if (
+    !value ||
+    value.includes('@') ||
+    value.endsWith('.') ||
+    value.includes('..') ||
+    !USERNAME_PATTERN.test(value)
+  ) {
     return 'invalid username';
   }
   return null;
 }
 
 export function validateName(value: string): string | null {
-  if (!value || value.length > MAX_NAME_LENGTH) {
+  if (!value) {
     return 'name is empty';
+  }
+
+  if (value.length > MAX_NAME_LENGTH) {
+    return 'name is too long';
   }
   return null;
 }
@@ -63,6 +73,7 @@ export function validatePassword(value: string): string | null {
 
 function toPublicUser(user: AuthUser): PublicUser {
   return {
+    id: user.id,
     email: user.email,
     name: user.name,
     language: user.language,
@@ -181,13 +192,14 @@ async function setup(env: Env, request: Request): Promise<Response> {
 
   const email = `${username}@${domain}`;
   const id = crypto.randomUUID();
+  const passwordHash = await hashPassword(password);
 
   try {
     await env.DB.prepare(
       `INSERT INTO users (id, email, name, password_hash, role, status, language)
        VALUES (?, ?, ?, ?, 'owner', 'active', ?)`,
     )
-      .bind(id, email, name, await hashPassword(password), language)
+      .bind(id, email, name, passwordHash, language)
       .run();
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -196,10 +208,14 @@ async function setup(env: Env, request: Request): Promise<Response> {
     throw error;
   }
 
-  const token = await createSession(env, id);
+  const token = await createSession(env, id, passwordHash);
+
+  if (!token) {
+    return jsonError('invalid credentials', 401);
+  }
 
   return Response.json(
-    { user: { email, name, language, role: 'owner' as const } },
+    { user: { id, email, name, language, role: 'owner' as const } },
     { headers: { 'Set-Cookie': sessionCookie(token) } },
   );
 }
@@ -248,7 +264,7 @@ async function login(env: Env, request: Request): Promise<Response> {
     !(await verifyPassword(password, user.password_hash))
   ) {
     if (user) {
-      await recordFailedLogin(env, user.id, user);
+      await recordFailedLogin(env, user.id);
     }
     return Response.json({ error: 'invalid credentials' }, { status: 401 });
   }
@@ -265,7 +281,12 @@ async function login(env: Env, request: Request): Promise<Response> {
       .run();
   }
 
-  const token = await createSession(env, user.id);
+  // 会话插入时原子检查密码哈希仍与本次验证一致，防止密码重置后旧登录补建会话
+  const token = await createSession(env, user.id, user.password_hash);
+
+  if (!token) {
+    return Response.json({ error: 'invalid credentials' }, { status: 401 });
+  }
 
   return Response.json(
     { user: toPublicUser(user) },
@@ -281,21 +302,25 @@ function lockedOut(at: string | null, count: number): boolean {
   );
 }
 
-async function recordFailedLogin(
-  env: Env,
-  userId: string,
-  user: { failed_login_at: string | null; failed_login_count: number },
-): Promise<void> {
-  // 距上次失败还在窗口内就累加，否则从 1 重新计
-  const withinWindow =
-    user.failed_login_at !== null &&
-    Date.now() - Date.parse(user.failed_login_at) < LOGIN_LOCK_MS;
-  const next = withinWindow ? user.failed_login_count + 1 : 1;
+async function recordFailedLogin(env: Env, userId: string): Promise<void> {
+  // 在数据库当前值上原子递增，避免并发失败请求用同一份旧快照互相覆盖
+  const now = Date.now();
 
   await env.DB.prepare(
-    'UPDATE users SET failed_login_count = ?, failed_login_at = ? WHERE id = ?',
+    `UPDATE users
+     SET failed_login_count = CASE
+           WHEN failed_login_at IS NOT NULL AND failed_login_at > ?
+             THEN failed_login_count + 1
+           ELSE 1
+         END,
+         failed_login_at = ?
+     WHERE id = ?`,
   )
-    .bind(next, new Date().toISOString(), userId)
+    .bind(
+      new Date(now - LOGIN_LOCK_MS).toISOString(),
+      new Date(now).toISOString(),
+      userId,
+    )
     .run();
 }
 
@@ -353,23 +378,45 @@ async function changePassword(env: Env, request: Request): Promise<Response> {
     return badRequest('current password is incorrect');
   }
 
-  await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
-    .bind(await hashPassword(next), user.id)
-    .run();
-
-  // 改密后作废其它设备的会话，当前会话保留
+  const passwordHash = await hashPassword(next);
   const token = readSessionToken(request);
+  const statements = [
+    // 密码更新同时要求用户仍启用且哈希仍是本次验证的旧哈希
+    env.DB.prepare(
+      `UPDATE users SET password_hash = ?
+       WHERE id = ? AND status = 'active' AND password_hash = ?`,
+    ).bind(passwordHash, user.id, record.password_hash),
+  ];
 
+  // 改密与作废其它设备会话放在同一批次，避免只改一半
   if (token) {
-    await env.DB.prepare(
-      'DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?',
-    )
-      .bind(user.id, await sha256Hex(token))
-      .run();
+    const tokenHash = await sha256Hex(token);
+
+    statements.push(
+      env.DB.prepare(
+        `DELETE FROM sessions
+         WHERE user_id = ? AND token_hash <> ?
+           AND EXISTS (
+             SELECT 1 FROM users WHERE id = ? AND password_hash = ?
+           )`,
+      ).bind(user.id, tokenHash, user.id, passwordHash),
+    );
   } else {
-    await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?')
-      .bind(user.id)
-      .run();
+    statements.push(
+      env.DB.prepare(
+        `DELETE FROM sessions
+         WHERE user_id = ?
+           AND EXISTS (
+             SELECT 1 FROM users WHERE id = ? AND password_hash = ?
+           )`,
+      ).bind(user.id, user.id, passwordHash),
+    );
+  }
+
+  const [updated] = await env.DB.batch(statements);
+
+  if (updated?.meta.changes !== 1) {
+    return badRequest('current password is incorrect');
   }
 
   return Response.json({ ok: true });
@@ -438,14 +485,27 @@ async function updateProfile(env: Env, request: Request): Promise<Response> {
     }
   }
 
-  const nextName = name ?? user.name;
-  const nextLanguage = language ?? user.language;
+  const updates: string[] = [];
+  const values: unknown[] = [];
+
+  if (username !== null) {
+    updates.push('email = ?');
+    values.push(email);
+  }
+
+  if (name !== null) {
+    updates.push('name = ?');
+    values.push(name);
+  }
+
+  if (language !== null) {
+    updates.push('language = ?');
+    values.push(language);
+  }
 
   try {
-    await env.DB.prepare(
-      'UPDATE users SET email = ?, name = ?, language = ? WHERE id = ?',
-    )
-      .bind(email, nextName, nextLanguage, user.id)
+    await env.DB.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`)
+      .bind(...values, user.id)
       .run();
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -454,9 +514,17 @@ async function updateProfile(env: Env, request: Request): Promise<Response> {
     throw error;
   }
 
-  return Response.json({
-    user: { email, name: nextName, language: nextLanguage, role: user.role },
-  });
+  const updated = await env.DB.prepare(
+    'SELECT id, email, name, language, role FROM users WHERE id = ?',
+  )
+    .bind(user.id)
+    .first<AuthUser>();
+
+  if (!updated) {
+    return notFound();
+  }
+
+  return Response.json({ user: toPublicUser(updated) });
 }
 
 export async function authenticate(
@@ -488,21 +556,32 @@ async function hasUsers(env: Env): Promise<boolean> {
   return Boolean(row?.count);
 }
 
-export async function createSession(env: Env, userId: string): Promise<string> {
+export async function createSession(
+  env: Env,
+  userId: string,
+  expectedPasswordHash: string,
+): Promise<string | null> {
   const token = randomHex(32);
+  const values = [
+    crypto.randomUUID(),
+    userId,
+    await sha256Hex(token),
+    new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString(),
+  ];
 
-  await env.DB.prepare(
-    'INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)',
+  // 所有会话签发都要求用户仍为 active 且密码哈希与本次验证一致
+  const result = await env.DB.prepare(
+    `INSERT INTO sessions (id, user_id, token_hash, expires_at)
+     SELECT ?, ?, ?, ?
+     WHERE EXISTS (
+       SELECT 1 FROM users
+       WHERE id = ? AND status = 'active' AND password_hash = ?
+     )`,
   )
-    .bind(
-      crypto.randomUUID(),
-      userId,
-      await sha256Hex(token),
-      new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString(),
-    )
+    .bind(...values, userId, expectedPasswordHash)
     .run();
 
-  return token;
+  return result.meta.changes === 1 ? token : null;
 }
 
 export function sessionCookie(token: string): string {
