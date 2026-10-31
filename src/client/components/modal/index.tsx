@@ -86,16 +86,6 @@ export function Modal({
 
     return () => {
       dialog?.close();
-
-      const active = document.activeElement;
-
-      if (
-        active instanceof HTMLElement &&
-        active !== document.body &&
-        !active.matches('input, textarea, select')
-      ) {
-        active.blur();
-      }
     };
   }, []);
 

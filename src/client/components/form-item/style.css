@@ -8,12 +8,6 @@
   margin-top: 0;
 }
 
-.form-item > label {
-  position: relative;
-  display: grid;
-  gap: 6px;
-}
-
 .form-label {
   display: flex;
   justify-content: space-between;
@@ -26,6 +20,14 @@
 
 .form-label > span:first-child {
   flex: none;
+}
+
+.form-label > label {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .form-item input {
@@ -67,6 +69,18 @@
   cursor: pointer;
 }
 
+.form-help-active {
+  display: none;
+}
+
+.form-help:hover .form-help-idle {
+  display: none;
+}
+
+.form-help:hover .form-help-active {
+  display: inline;
+}
+
 /* select 关掉浏览器默认外观，base-select 的内部偏移会让文字与 input 对不齐 */
 .form-item select {
   appearance: none;
@@ -78,7 +92,11 @@
 }
 
 /* 下拉箭头取 Remix Icon 的 arrow-down-s-line，用 mask 与主题变量上色 */
-.form-item > label:has(> select)::after {
+.form-item:has(> select) {
+  position: relative;
+}
+
+.form-item:has(> select)::after {
   content: '';
   position: absolute;
   right: 10px;
