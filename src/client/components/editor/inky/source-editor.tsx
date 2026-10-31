@@ -11,10 +11,10 @@ import {
 } from '@codemirror/autocomplete';
 import { indentLess, indentMore } from '@codemirror/commands';
 import { html } from '@codemirror/lang-html';
-import { EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { Compartment, EditorState, Prec } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
-import { type KeyboardEvent, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { CODE_MIRROR_THEME } from '../codemirror-theme';
 
@@ -23,10 +23,12 @@ import { INKY_TAGS } from './tags';
 export interface InkySourceEditorProps {
   value: string;
   onChange: (value: string) => void;
+  selection?: number | null;
+  readOnly?: boolean;
 }
 
-const VOID_TAGS = new Set(['image']);
-const SHORT_TAGS = new Set(['spacer', 'divider']);
+const VOID_TAGS = new Set(['image', 'video']);
+const SHORT_TAGS = new Set(['spacer']);
 
 function snippetFor(tag: string): string {
   if (VOID_TAGS.has(tag)) {
@@ -35,6 +37,10 @@ function snippetFor(tag: string): string {
 
   if (SHORT_TAGS.has(tag)) {
     return `${tag} height="\${1}"></${tag}>`;
+  }
+
+  if (tag === 'divider') {
+    return `${tag}></${tag}>`;
   }
 
   return `${tag}>\n  \${0}\n</${tag}>`;
@@ -63,10 +69,50 @@ const inkyTagCompletion: CompletionSource = context => {
   };
 };
 
-export function InkySourceEditor({ value, onChange }: InkySourceEditorProps) {
+const inkyTabKeymap = Prec.high(
+  keymap.of([
+    {
+      key: 'Tab',
+      run: view => {
+        if (
+          completionStatus(view.state) === 'active' &&
+          acceptCompletion(view)
+        ) {
+          return true;
+        }
+
+        if (hasNextSnippetField(view.state)) {
+          nextSnippetField(view);
+
+          return true;
+        }
+
+        return indentMore(view);
+      },
+      shift: view => {
+        if (hasPrevSnippetField(view.state)) {
+          prevSnippetField(view);
+
+          return true;
+        }
+
+        return indentLess(view);
+      },
+    },
+  ]),
+);
+
+export function InkySourceEditor({
+  value,
+  onChange,
+  selection,
+  readOnly = false,
+}: InkySourceEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
+  const initialSelectionRef = useRef(selection);
+  const readOnlyCompartmentRef = useRef(new Compartment());
 
   onChangeRef.current = onChange;
 
@@ -80,13 +126,24 @@ export function InkySourceEditor({ value, onChange }: InkySourceEditorProps) {
       parent: host,
       state: EditorState.create({
         doc: value,
+        selection: {
+          anchor: Math.max(
+            0,
+            Math.min(initialSelectionRef.current ?? 0, value.length),
+          ),
+        },
         extensions: [
           basicSetup,
+          inkyTabKeymap,
           html(),
           autocompletion({ override: [inkyTagCompletion] }),
           CODE_MIRROR_THEME,
           EditorView.lineWrapping,
           EditorState.tabSize.of(2),
+          readOnlyCompartmentRef.current.of([
+            EditorState.readOnly.of(readOnly),
+            EditorView.editable.of(!readOnly),
+          ]),
           EditorView.contentAttributes.of({ 'aria-label': 'Inky' }),
           EditorView.updateListener.of(update => {
             if (update.docChanged) {
@@ -122,46 +179,14 @@ export function InkySourceEditor({ value, onChange }: InkySourceEditorProps) {
     }
   }, [value]);
 
-  const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Tab') {
-      return;
-    }
-    const view = viewRef.current;
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: readOnlyCompartmentRef.current.reconfigure([
+        EditorState.readOnly.of(readOnly),
+        EditorView.editable.of(!readOnly),
+      ]),
+    });
+  }, [readOnly]);
 
-    if (!view) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (
-      !event.shiftKey &&
-      completionStatus(view.state) === 'active' &&
-      acceptCompletion(view)
-    ) {
-      return;
-    }
-
-    if (!event.shiftKey && hasNextSnippetField(view.state)) {
-      nextSnippetField(view);
-
-      return;
-    }
-
-    if (event.shiftKey && hasPrevSnippetField(view.state)) {
-      prevSnippetField(view);
-
-      return;
-    }
-
-    (event.shiftKey ? indentLess : indentMore)(view);
-  };
-
-  return (
-    <div
-      className="inky-source"
-      ref={hostRef}
-      onKeyDownCapture={handleKeyDownCapture}
-    />
-  );
+  return <div className="inky-source" ref={hostRef} />;
 }
