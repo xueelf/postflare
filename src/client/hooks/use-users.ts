@@ -45,10 +45,16 @@ export function useUsers() {
 
   const refresh = useCallback(() => {
     apiFetch('/api/users')
-      .then(res => res.json<UserSummary[]>())
-      .then(data => setUsers(data))
+      .then(async res => {
+        if (!res.ok) {
+          toast.error(t('common.loadFailed'));
+
+          return;
+        }
+        setUsers(await res.json<UserSummary[]>());
+      })
       .catch(() => {});
-  }, []);
+  }, [t, toast]);
 
   useEffect(() => {
     refresh();
@@ -69,8 +75,6 @@ export function useUsers() {
       body: JSON.stringify(options),
     })
       .then(async res => {
-        setBusy(false);
-
         const data = (await res.json()) as { link?: string; error?: string };
 
         if (!res.ok || !data.link) {
@@ -89,11 +93,11 @@ export function useUsers() {
         } as IssuedLink;
       })
       .catch(() => {
-        setBusy(false);
         toast.error(t('users.actionFailedRetry'));
 
         return null;
-      });
+      })
+      .finally(() => setBusy(false));
   };
 
   const setStatus = (id: string, status: 'active' | 'disabled') => {
@@ -105,8 +109,6 @@ export function useUsers() {
       body: JSON.stringify({ status }),
     })
       .then(async res => {
-        setBusy(false);
-
         if (!res.ok) {
           report(
             (await res.json().catch(() => ({}))) as { error?: string },
@@ -123,11 +125,11 @@ export function useUsers() {
         return true;
       })
       .catch(() => {
-        setBusy(false);
         toast.error(t('users.actionFailedRetry'));
 
         return false;
-      });
+      })
+      .finally(() => setBusy(false));
   };
 
   const remove = (id: string) => {
@@ -135,8 +137,6 @@ export function useUsers() {
 
     return apiFetch(`/api/users/${id}`, { method: 'DELETE' })
       .then(async res => {
-        setBusy(false);
-
         if (!res.ok) {
           report(
             (await res.json().catch(() => ({}))) as { error?: string },
@@ -151,11 +151,11 @@ export function useUsers() {
         return true;
       })
       .catch(() => {
-        setBusy(false);
         toast.error(t('users.actionFailedRetry'));
 
         return false;
-      });
+      })
+      .finally(() => setBusy(false));
   };
 
   const issueLink = (id: string) => {
@@ -163,8 +163,6 @@ export function useUsers() {
 
     return apiFetch(`/api/users/${id}/link`, { method: 'POST' })
       .then(async res => {
-        setBusy(false);
-
         const data = (await res.json().catch(() => ({}))) as {
           link?: string;
           error?: string;
@@ -180,11 +178,11 @@ export function useUsers() {
         return { url: data.link, purpose: 'reset' } as IssuedLink;
       })
       .catch(() => {
-        setBusy(false);
         toast.error(t('users.actionFailedRetry'));
 
         return null;
-      });
+      })
+      .finally(() => setBusy(false));
   };
 
   return { users, busy, invite, setStatus, remove, issueLink };
