@@ -73,7 +73,7 @@ CREATE INDEX idx_messages_draft_order ON messages (user_id, mailbox, updated_at)
 CREATE INDEX idx_messages_updated ON messages (updated_at);
 
 -- 收信与已发送导入都按 Message-ID 去重（Email Routing 为至少一次投递，重投会重复入库）
-CREATE UNIQUE INDEX idx_messages_message_id
+CREATE UNIQUE INDEX idx_messages_message_id_direction
   ON messages (user_id, direction, message_id)
   WHERE message_id IS NOT NULL;
 
@@ -84,7 +84,7 @@ CREATE TABLE templates (
   subject TEXT NOT NULL,
   body_html TEXT NOT NULL,
   -- 模板的 Inky 源码
-  body_source TEXT NOT NULL,
+  body_source TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
