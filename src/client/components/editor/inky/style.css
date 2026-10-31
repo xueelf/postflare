@@ -4,11 +4,6 @@
   flex-direction: column;
   min-height: 240px;
   overflow: hidden;
-  border-bottom: 1px solid var(--line);
-}
-
-.inky-source:focus-within {
-  border-color: var(--accent);
 }
 
 .inky-source .cm-editor {
@@ -20,78 +15,12 @@
   overflow: auto;
 }
 
-.inky-link-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.inky-link-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.inky-link-field span {
-  color: var(--faint);
-  font-size: 12px;
-}
-
-.inky-link-field input {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-}
-
-.inky-link-field input:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-
-.inky-table-dialog {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  padding: 8px 0;
-}
-
-.inky-table-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.inky-table-field span {
-  color: var(--faint);
-  font-size: 12px;
-}
-
-.inky-table-field input {
-  width: 88px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  text-align: center;
-}
-
-.inky-table-field input:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-
 .inky-frame {
   display: flex;
   flex: 1;
   min-height: 0;
+  padding-top: var(--compose-line-padding, 12px);
   overflow: auto;
-  border-bottom: 1px solid var(--line);
   background: #fff;
 }
 
@@ -99,6 +28,134 @@
   display: none;
 }
 
-.inky-frame:focus-within {
-  border-color: var(--accent);
+.popover.compose-components-popover {
+  width: anchor-size(width);
+  max-height: calc(100dvh - 160px);
+  margin-bottom: 0;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.compose-components-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 2px;
+}
+
+.compose-components-grid .popover-item {
+  min-width: 0;
+}
+
+.compose-components-grid .popover-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compose-components-trigger:has(+ .popover:popover-open) {
+  --button-background-color: var(--nav-active);
+  --button-color: var(--text);
+}
+
+.inky-component-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.inky-menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inky-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.inky-menu-item-fields {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.inky-component-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.inky-component-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.inky-menu-add {
+  align-self: flex-start;
+  margin-top: 16px;
+}
+
+.inky-image-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inky-image-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.inky-image-drop img {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+}
+
+.inky-image-clear {
+  align-self: flex-end;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.inky-image-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.inky-uploading {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.compose-toolbar .icon-btn:disabled {
+  --button-background-color: transparent;
+  --button-border-color: transparent;
+  --button-color: var(--faint);
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--faint);
+  opacity: 0.55;
 }

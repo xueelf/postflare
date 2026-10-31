@@ -8,7 +8,7 @@ export const CODE_MIRROR_THEME = EditorView.theme({
     color: 'var(--text)',
   },
   '.cm-content': {
-    padding: '8px 0',
+    padding: 'var(--compose-line-padding, 12px) 0',
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     fontSize: '12px',
     lineHeight: '1.6',
