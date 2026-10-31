@@ -1,8 +1,6 @@
 import { type TemplateListProps, TemplateList } from './list';
 import { type TemplatePreviewProps, TemplatePreview } from './preview';
 
-import './style.css';
-
 export interface TemplatesProps
   extends TemplateListProps, Omit<TemplatePreviewProps, 'template'> {}
 
