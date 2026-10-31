@@ -161,6 +161,7 @@ export function Users({
         <Button
           variant="primary"
           className="users-create"
+          disabled={busy}
           onClick={() => setInviteOpen(true)}
         >
           <RiAddLine size={20} aria-hidden />
@@ -253,10 +254,10 @@ function InviteDialog({
   return (
     <Modal
       title={t('users.inviteUser')}
-      onDismiss={onDismiss}
+      onDismiss={busy ? undefined : onDismiss}
       footer={
         <>
-          <button type="button" onClick={onDismiss}>
+          <button type="button" disabled={busy} onClick={onDismiss}>
             {t('users.cancel')}
           </button>
           <Button
@@ -275,6 +276,9 @@ function InviteDialog({
         onSubmit={event => {
           event.preventDefault();
 
+          if (busy) {
+            return;
+          }
           onSubmit({
             expiresAt: new Date(expiresAt).toISOString(),
             maxUses: Number(maxUses),
@@ -288,6 +292,7 @@ function InviteDialog({
             min={1}
             max={INVITE_MAX_USES}
             required
+            disabled={busy}
             onChange={event => setMaxUses(event.target.value)}
           />
         </FormItem>
@@ -298,6 +303,7 @@ function InviteDialog({
             min={min}
             max={max}
             required
+            disabled={busy}
             onChange={event => setExpiresAt(event.target.value)}
           />
         </FormItem>
