@@ -1,6 +1,6 @@
 {
   "name": "postflare",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Self-hosted webmail on Cloudflare Workers, D1, R2, Email Routing, and Email Sending.",
   "license": "MIT",
