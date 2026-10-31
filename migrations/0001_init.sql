@@ -32,7 +32,6 @@ CREATE INDEX idx_sessions_expires ON sessions (expires_at);
 -- max_uses 与 used_count 限定邀请链接可供几人注册，重置链接固定一人一次
 CREATE TABLE user_tokens (
   id TEXT PRIMARY KEY,
-  
   user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
   max_uses INTEGER NOT NULL DEFAULT 1,
@@ -73,10 +72,10 @@ CREATE INDEX idx_messages_draft_order ON messages (user_id, mailbox, updated_at)
 -- 定时清理回收站与垃圾邮件按更新时间范围扫描
 CREATE INDEX idx_messages_updated ON messages (updated_at);
 
--- 入站邮件按 Message-ID 去重（Email Routing 为至少一次投递，重投会重复入库）
+-- 收信与已发送导入都按 Message-ID 去重（Email Routing 为至少一次投递，重投会重复入库）
 CREATE UNIQUE INDEX idx_messages_message_id
-  ON messages (user_id, message_id)
-  WHERE message_id IS NOT NULL AND direction = 'inbound';
+  ON messages (user_id, direction, message_id)
+  WHERE message_id IS NOT NULL;
 
 CREATE TABLE templates (
   id TEXT PRIMARY KEY,
