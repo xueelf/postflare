@@ -5,7 +5,6 @@ import {
   cloneElement,
   isValidElement,
   useId,
-  useState,
 } from 'react';
 
 import './style.css';
@@ -23,34 +22,47 @@ const LABELABLE_TAGS = new Set([
 
 export interface FormItemProps {
   label: ReactNode;
+  help?: ReactNode;
   children: ReactNode;
 }
 
 /**
- * 表单字段由标签与控件组成，校验交给浏览器原生能力（required、minLength 等）。
- * label 显式绑定控件，否则标签行里的按钮会成为 labeled control，点标签会触发它。
+ * 表单字段由标签、可选的字段说明与控件组成，校验交给浏览器原生能力。
+ * 标签、帮助按钮和控件是兄弟节点，标签只绑定控件，不会把帮助按钮一起包进去。
  */
-export function FormItem({ label, children }: FormItemProps) {
+export function FormItem({ label, help, children }: FormItemProps) {
   const id = useId();
   const isControl =
     isValidElement(children) &&
     typeof children.type === 'string' &&
     LABELABLE_TAGS.has(children.type);
-
-  const body = (
-    <>
-      <span className="form-label">{label}</span>
-      {isControl
-        ? cloneElement(children as ReactElement<{ id?: string }>, {
-            id: (children as ReactElement<{ id?: string }>).props.id ?? id,
-          })
-        : children}
-    </>
+  const controlId = isControl
+    ? ((children as ReactElement<{ id?: string }>).props.id ?? id)
+    : undefined;
+  const control = isControl
+    ? cloneElement(children as ReactElement<{ id?: string }>, {
+        id: controlId,
+      })
+    : children;
+  const labelContent = isControl ? (
+    <label htmlFor={controlId}>{label}</label>
+  ) : (
+    <span>{label}</span>
   );
 
   return (
     <div className="form-item">
-      {isControl ? <label htmlFor={id}>{body}</label> : body}
+      <div className="form-label">
+        {help ? (
+          <span className="form-label-main">
+            {labelContent}
+            {help}
+          </span>
+        ) : (
+          labelContent
+        )}
+      </div>
+      {control}
     </div>
   );
 }
@@ -61,26 +73,19 @@ export interface FormHelpProps {
 }
 
 /**
- * 字段说明是标签旁的小问号，点击区域就是图标本身，hover 换成填充图标。
- * hover 用 mouseenter 判断，按钮在 <label> 里时 CSS :hover 会被浏览器扩到整行标签。
+ * 字段说明是标签旁的小问号，点击区域就是图标本身。
+ * hover 图标切换交给 CSS，不再依赖按钮是否被错误地包在 label 里。
  */
 export function FormHelp({ label, onClick }: FormHelpProps) {
-  const [hovered, setHovered] = useState(false);
-
   return (
     <button
       type="button"
       className="form-help"
       onClick={onClick}
       aria-label={label}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
-      {hovered ? (
-        <RiQuestionFill size={16} aria-hidden />
-      ) : (
-        <RiQuestionLine size={16} aria-hidden />
-      )}
+      <RiQuestionLine className="form-help-idle" size={16} aria-hidden />
+      <RiQuestionFill className="form-help-active" size={16} aria-hidden />
     </button>
   );
 }

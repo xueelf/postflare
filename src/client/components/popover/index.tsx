@@ -9,6 +9,10 @@ export interface PopoverProps {
   triggerLabel: string;
   triggerTitle?: string;
   side?: 'top' | 'bottom';
+  /** 指定外部锚点元素，弹层不再以触发按钮定位。 */
+  anchorName?: string;
+  /** 追加到弹层容器的类名。 */
+  popoverClassName?: string;
   children: ReactNode;
 }
 
@@ -22,16 +26,26 @@ export function Popover({
   triggerLabel,
   triggerTitle,
   side = 'bottom',
+  anchorName,
+  popoverClassName,
   children,
 }: PopoverProps) {
-  const anchorName = `--${id}`;
+  const triggerAnchorName = `--${id}`;
+  const positionAnchor = anchorName ?? triggerAnchorName;
+  const className = ['popover', `popover-${side}`, popoverClassName]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <>
       <button
         type="button"
         className={triggerClassName}
-        style={{ anchorName } as CSSProperties}
+        style={
+          anchorName
+            ? undefined
+            : ({ anchorName: triggerAnchorName } as CSSProperties)
+        }
         popoverTarget={id}
         aria-label={triggerLabel}
         title={triggerTitle}
@@ -41,8 +55,8 @@ export function Popover({
       <div
         id={id}
         popover="auto"
-        className={`popover popover-${side}`}
-        style={{ positionAnchor: anchorName } as CSSProperties}
+        className={className}
+        style={{ positionAnchor } as CSSProperties}
       >
         {children}
       </div>

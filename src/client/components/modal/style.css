@@ -44,16 +44,11 @@
   flex-direction: column;
   min-height: 0;
   padding: 16px;
+  overflow-y: auto;
 }
 
 .dialog-head + .modal-body {
   padding-top: 0;
-}
-
-/* 全高表单（写信、模板）占满内容区，底部留白没有意义，
-   正文行自己的底部线条直接落在弹窗边界上，与底栏只隔底栏自身的内边距 */
-.modal-body:has(> .compose-form) {
-  padding-bottom: 0;
 }
 
 .modal-foot {
