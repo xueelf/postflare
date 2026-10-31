@@ -18,7 +18,7 @@
         "codemirror": "^6.0.2",
         "dompurify": "^3.4.17",
         "mimetext": "^3.0.28",
-        "postal-mime": "^4.0.5",
+        "postal-mime": "^4.1.4",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
         "react-router": "^8.4.0",
@@ -619,7 +619,7 @@
 
     "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
 
-    "postal-mime": ["postal-mime@4.0.5", "", {}, "sha512-fWu1Cmo2ef6LCwgHU1fVrqo55eyFP31F7hH0j/wMWkQYYdh+H8zz3nBf3EYRQelkmTfDrbDfTvPUQEBT8DS/jw=="],
+    "postal-mime": ["postal-mime@4.1.4", "", {}, "sha512-+6Qsn7Q2TSLMScfN4X2VQIclPRKgDAtKhytQex3fVSV/+HgVaawtsQGzKYDQLQIBR7b4Vfg+88WRGvuF/kwLSw=="],
 
     "prelude-ls": ["prelude-ls@1.2.1", "", {}, "sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g=="],
 
