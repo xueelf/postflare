@@ -26,6 +26,7 @@ import type { View } from '#/client/route';
 
 export interface ReaderProps {
   message: MessageDetail | null;
+  loading: boolean;
   view: View;
   accountName: string;
   accountEmail: string;
@@ -43,6 +44,7 @@ export interface ReaderProps {
  */
 export function Reader({
   message,
+  loading,
   view,
   accountName,
   accountEmail,
@@ -64,7 +66,7 @@ export function Reader({
     return (
       <section className="panel reader-pane" aria-label={t('mail.reader')}>
         <EmptyState icon={<RiMailLine aria-hidden />}>
-          {t('mail.selectMessage')}
+          {loading ? t('common.loading') : t('mail.selectMessage')}
         </EmptyState>
       </section>
     );
