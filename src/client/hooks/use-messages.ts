@@ -10,9 +10,9 @@ import {
   MAILBOX_VIEWS,
   viewPath,
 } from '#/client/route';
+import { MAIL_RETENTION_DAYS } from '#/limits';
 
 import type { ConfirmRequest } from './use-confirm';
-import { useDebouncedValue } from './use-debounced';
 
 // 移动目标 → 成功提示
 const MOVE_TOASTS: Record<'inbox' | 'sent' | 'spam' | 'trash', MessageKey> = {
@@ -57,17 +57,19 @@ export function useMessages(
   navigate: NavigateFunction,
   ready: boolean,
   askConfirm: (request: ConfirmRequest) => void,
+  deleteDraft?: (id: string) => Promise<Response | null>,
 ) {
   const { t } = useI18n();
   const toast = useToast();
-  const [search, setSearch] = useState(route.q);
-  const query = useDebouncedValue(search.trim(), 300);
+  const [search, setSearchState] = useState(route.q);
   const [listRevision, setListRevision] = useState(0);
   const [messages, setMessages] = useState<MessageSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  // 列表请求的视图与搜索词，触底加载的旧响应据此作废
-  const listKeyRef = useRef('');
+  // 列表、游标和产生它们的查询必须一致
+  const listKey = `${route.view}|${route.q}|${listRevision}`;
+  const listKeyRef = useRef(listKey);
+  const cursorKeyRef = useRef('');
   const loadingMoreRef = useRef(false);
   const [counts, setCounts] = useState({
     unread: 0,
@@ -75,16 +77,55 @@ export function useMessages(
     spam_unread: 0,
   });
   const [openMessage, setOpenMessage] = useState<MessageDetail | null>(null);
+  const [messageLoading, setMessageLoading] = useState(false);
+  const routeRef = useRef(route);
+  const navigateRef = useRef(navigate);
+  const detailVersionRef = useRef(0);
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchVersionRef = useRef(0);
+  const disposedRef = useRef(false);
+
+  routeRef.current = route;
+  navigateRef.current = navigate;
+  listKeyRef.current = listKey;
 
   const refreshCounts = () =>
     apiFetch('/api/counts')
-      .then(res =>
-        res.json<{ unread: number; drafts: number; spam_unread: number }>(),
-      )
-      .then(data => setCounts(data))
+      .then(async res => {
+        if (!res.ok) {
+          if (!disposedRef.current) {
+            toast.error(t('common.loadFailed'));
+          }
+
+          return;
+        }
+        const data = await res.json<{
+          unread: number;
+          drafts: number;
+          spam_unread: number;
+        }>();
+
+        if (!disposedRef.current) {
+          setCounts(data);
+        }
+      })
       .catch(() => {});
 
-  const refreshList = () => setListRevision(current => current + 1);
+  const refreshList = () => {
+    if (!disposedRef.current) {
+      setListRevision(current => current + 1);
+    }
+  };
+
+  // 保存响应直接带回详情，写请求串行完成后按时间顺序落到阅读器
+  const syncOpenMessage = (message: MessageDetail) => {
+    if (disposedRef.current || routeRef.current.messageId !== message.id) {
+      return;
+    }
+    detailVersionRef.current += 1;
+    setOpenMessage(message);
+    setMessageLoading(false);
+  };
 
   useEffect(() => {
     if (!ready) {
@@ -93,19 +134,59 @@ export function useMessages(
     refreshCounts();
   }, [ready]);
 
-  // 输入框随 URL 同步（视图切换时清空，后退前进时回填）
+  // 输入框随 URL 同步，路由变化时取消尚未提交的搜索
   useEffect(() => {
-    setSearch(route.q);
-  }, [route.q, route.view]);
+    searchVersionRef.current += 1;
 
-  // 防抖后的搜索词提交到 URL，不堆历史
-  useEffect(() => {
-    if (query !== route.q) {
-      navigate(viewPath(route.view, route.messageId, query), {
-        replace: true,
-      });
+    if (commitTimerRef.current) {
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = null;
     }
-  }, [query, route.view, route.messageId, route.q]);
+    setSearchState(route.q);
+  }, [route.q, route.view, route.messageId, route.hash]);
+
+  useEffect(() => {
+    return () => {
+      disposedRef.current = true;
+
+      if (commitTimerRef.current) {
+        clearTimeout(commitTimerRef.current);
+      }
+    };
+  }, []);
+
+  // 只有用户输入才安排防抖提交，提交时保留当前片段和导航状态
+  const setSearch = (value: string) => {
+    const version = ++searchVersionRef.current;
+    const context = routeRef.current;
+
+    setSearchState(value);
+
+    if (commitTimerRef.current) {
+      clearTimeout(commitTimerRef.current);
+    }
+
+    commitTimerRef.current = setTimeout(() => {
+      const current = routeRef.current;
+
+      if (
+        version !== searchVersionRef.current ||
+        current.hash !== context.hash ||
+        current.view !== context.view ||
+        current.messageId !== context.messageId
+      ) {
+        return;
+      }
+      const next = value.trim();
+
+      if (next !== current.q) {
+        navigateRef.current(
+          `${viewPath(current.view, current.messageId, next)}${current.hash}`,
+          { replace: true, state: current.state },
+        );
+      }
+    }, 300);
+  };
 
   // 列表请求由 AbortController 作废，避免旧响应覆盖新视图
   useEffect(() => {
@@ -115,18 +196,36 @@ export function useMessages(
 
     const controller = new AbortController();
     const suffix = route.q ? `&q=${encodeURIComponent(route.q)}` : '';
+    const key = listKey;
 
-    listKeyRef.current = `${route.view}|${route.q}|${listRevision}`;
+    // 新查询首页返回前不允许继续使用旧游标
+    cursorKeyRef.current = '';
+    setNextCursor(null);
 
     apiFetch(`/api/messages?mailbox=${route.view}${suffix}`, {
       signal: controller.signal,
     })
-      .then(res =>
-        res.json<{ messages: MessageSummary[]; next: string | null }>(),
-      )
-      .then(data => {
+      .then(async res => {
+        if (disposedRef.current || controller.signal.aborted) {
+          return;
+        }
+
+        if (!res.ok) {
+          toast.error(t('common.loadFailed'));
+
+          return;
+        }
+        const data = await res.json<{
+          messages: MessageSummary[];
+          next: string | null;
+        }>();
+
+        if (disposedRef.current || listKeyRef.current !== key) {
+          return;
+        }
         setMessages(data.messages);
         setNextCursor(data.next);
+        cursorKeyRef.current = key;
       })
       .catch(() => {});
 
@@ -135,10 +234,14 @@ export function useMessages(
 
   // 触底加载下一页，视图、搜索词或列表刷新后旧响应直接丢弃
   const loadMore = () => {
-    if (!nextCursor || loadingMoreRef.current) {
+    if (
+      !nextCursor ||
+      loadingMoreRef.current ||
+      cursorKeyRef.current !== listKey
+    ) {
       return;
     }
-    const key = listKeyRef.current;
+    const key = listKey;
     const cursor = nextCursor;
     const suffix = route.q ? `&q=${encodeURIComponent(route.q)}` : '';
 
@@ -148,11 +251,26 @@ export function useMessages(
     apiFetch(
       `/api/messages?mailbox=${route.view}${suffix}&cursor=${encodeURIComponent(cursor)}`,
     )
-      .then(res =>
-        res.json<{ messages: MessageSummary[]; next: string | null }>(),
-      )
-      .then(data => {
-        if (listKeyRef.current !== key) {
+      .then(async res => {
+        if (disposedRef.current) {
+          return;
+        }
+
+        if (!res.ok) {
+          toast.error(t('common.loadFailed'));
+
+          return;
+        }
+        const data = await res.json<{
+          messages: MessageSummary[];
+          next: string | null;
+        }>();
+
+        if (
+          disposedRef.current ||
+          listKeyRef.current !== key ||
+          cursorKeyRef.current !== key
+        ) {
           return;
         }
         setMessages(current => {
@@ -168,7 +286,10 @@ export function useMessages(
       .catch(() => {})
       .finally(() => {
         loadingMoreRef.current = false;
-        setLoadingMore(false);
+
+        if (!disposedRef.current) {
+          setLoadingMore(false);
+        }
       });
   };
 
@@ -182,14 +303,26 @@ export function useMessages(
 
     if (!MAILBOX_VIEWS.includes(view) || !messageId) {
       setOpenMessage(null);
+      setMessageLoading(false);
 
       return;
     }
 
     const controller = new AbortController();
 
+    let cancelled = false;
+
+    const version = detailVersionRef.current;
+
+    setOpenMessage(null);
+    setMessageLoading(true);
+
     apiFetch(`/api/messages/${messageId}`, { signal: controller.signal })
       .then(async res => {
+        if (cancelled || disposedRef.current) {
+          return null;
+        }
+
         if (res.status === 404) {
           navigate(viewPath(view, null, route.q), { replace: true });
 
@@ -198,7 +331,17 @@ export function useMessages(
         return res.ok ? ((await res.json()) as MessageDetail) : null;
       })
       .then(data => {
+        if (
+          cancelled ||
+          disposedRef.current ||
+          version !== detailVersionRef.current
+        ) {
+          return;
+        }
+
         if (!data) {
+          setMessageLoading(false);
+
           return;
         }
 
@@ -210,6 +353,7 @@ export function useMessages(
           return;
         }
         setOpenMessage(data);
+        setMessageLoading(false);
 
         if ((view === 'inbox' || view === 'spam') && data.seen === 0) {
           apiFetch(`/api/messages/${messageId}`, {
@@ -219,7 +363,7 @@ export function useMessages(
           })
             .then(res => {
               // fetch 不会因 HTTP 错误 reject，失败时不改本地状态与计数
-              if (!res.ok) {
+              if (cancelled || disposedRef.current || !res.ok) {
                 return;
               }
               setMessages(current =>
@@ -232,9 +376,16 @@ export function useMessages(
             .catch(() => {});
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled && !disposedRef.current) {
+          setMessageLoading(false);
+        }
+      });
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [ready, route.view, route.messageId]);
 
   // 删除或移走后自动选中下一条，没有下一条则上一条
@@ -247,6 +398,17 @@ export function useMessages(
     return messages[index + 1]?.id ?? messages[index - 1]?.id ?? null;
   };
 
+  // 只有用户仍停留在操作发起时的邮件与搜索上下文，才自动选择邻居
+  const sameMessageContext = (id: string, context: MailRoute) => {
+    const current = routeRef.current;
+
+    return (
+      current.messageId === id &&
+      current.view === context.view &&
+      current.q === context.q
+    );
+  };
+
   const discardDraft = (id: string) => {
     askConfirm({
       title: t('mail.discardTitle'),
@@ -254,10 +416,24 @@ export function useMessages(
       confirmText: t('mail.discard'),
       danger: true,
       action: () => {
+        const context = routeRef.current;
         const next = neighborId(id);
+        const request = deleteDraft
+          ? deleteDraft(id)
+          : apiFetch(`/api/drafts/${id}`, { method: 'DELETE' });
 
-        apiFetch(`/api/drafts/${id}`, { method: 'DELETE' })
+        request
           .then(res => {
+            if (disposedRef.current) {
+              return;
+            }
+
+            if (!res) {
+              toast.error(t('compose.editingElsewhere'));
+
+              return;
+            }
+
             if (!res.ok) {
               toast.error(t('mail.actionFailedRetry'));
 
@@ -266,10 +442,15 @@ export function useMessages(
             toast.success(t('mail.draftDiscarded'));
             refreshList();
             refreshCounts();
-            navigate(viewPath('drafts', next, route.q), { replace: true });
+
+            if (sameMessageContext(id, context)) {
+              navigate(viewPath('drafts', next, context.q), { replace: true });
+            }
           })
           .catch(() => {
-            toast.error(t('mail.actionFailedRetry'));
+            if (!disposedRef.current) {
+              toast.error(t('mail.actionFailedRetry'));
+            }
           });
       },
     });
@@ -279,6 +460,7 @@ export function useMessages(
     id: string,
     mailbox: 'inbox' | 'sent' | 'spam' | 'trash',
   ) => {
+    const context = routeRef.current;
     const next = neighborId(id);
 
     apiFetch(`/api/messages/${id}`, {
@@ -287,24 +469,46 @@ export function useMessages(
       body: JSON.stringify({ mailbox }),
     })
       .then(res => {
+        if (disposedRef.current) {
+          return;
+        }
+
         if (!res.ok) {
-          toast.error(t('mail.actionFailedRetry'));
+          toast.error(
+            res.status === 410
+              ? t('mail.expired', { days: MAIL_RETENTION_DAYS })
+              : t('mail.actionFailedRetry'),
+          );
+
+          if (res.status === 410) {
+            refreshList();
+            refreshCounts();
+          }
 
           return;
         }
         toast.success(t(MOVE_TOASTS[mailbox]));
         refreshList();
         refreshCounts();
-        navigate(viewPath(route.view, next, route.q), { replace: true });
+
+        if (sameMessageContext(id, context)) {
+          navigate(viewPath(context.view, next, context.q), { replace: true });
+        }
       })
       .catch(() => {
-        toast.error(t('mail.actionFailedRetry'));
+        if (!disposedRef.current) {
+          toast.error(t('mail.actionFailedRetry'));
+        }
       });
   };
 
   const downloadMessage = (id: string) => {
     apiFetch(`/api/messages/${id}/eml`)
       .then(async res => {
+        if (disposedRef.current) {
+          return;
+        }
+
         if (!res.ok) {
           toast.error(t('mail.actionFailedRetry'));
 
@@ -316,6 +520,12 @@ export function useMessages(
             res.headers.get('Content-Disposition') ?? '',
           )?.[1] ?? 'message.eml';
         const url = URL.createObjectURL(await res.blob());
+
+        if (disposedRef.current) {
+          URL.revokeObjectURL(url);
+
+          return;
+        }
         const link = document.createElement('a');
 
         link.href = url;
@@ -325,7 +535,9 @@ export function useMessages(
         setTimeout(() => URL.revokeObjectURL(url));
       })
       .catch(() => {
-        toast.error(t('mail.actionFailedRetry'));
+        if (!disposedRef.current) {
+          toast.error(t('mail.actionFailedRetry'));
+        }
       });
   };
 
@@ -338,6 +550,10 @@ export function useMessages(
 
     apiFetch('/api/messages/import', { method: 'POST', body: form })
       .then(async res => {
+        if (disposedRef.current) {
+          return;
+        }
+
         if (!res.ok) {
           throw new Error('import failed');
         }
@@ -346,6 +562,10 @@ export function useMessages(
           skipped: number;
           failed: number;
         };
+
+        if (disposedRef.current) {
+          return;
+        }
 
         if (data.imported === 0) {
           toast.error(t('mail.importFailed'));
@@ -367,7 +587,9 @@ export function useMessages(
         refreshCounts();
       })
       .catch(() => {
-        toast.error(t('mail.importFailed'));
+        if (!disposedRef.current) {
+          toast.error(t('mail.importFailed'));
+        }
       });
   };
 
@@ -378,10 +600,15 @@ export function useMessages(
       confirmText: t('mail.purgeConfirm'),
       danger: true,
       action: () => {
+        const context = routeRef.current;
         const next = neighborId(id);
 
         apiFetch(`/api/messages/${id}`, { method: 'DELETE' })
           .then(res => {
+            if (disposedRef.current) {
+              return;
+            }
+
             if (!res.ok) {
               toast.error(t('mail.actionFailedRetry'));
 
@@ -390,10 +617,17 @@ export function useMessages(
             toast.success(t('mail.purged'));
             refreshList();
             refreshCounts();
-            navigate(viewPath(route.view, next, route.q), { replace: true });
+
+            if (sameMessageContext(id, context)) {
+              navigate(viewPath(context.view, next, context.q), {
+                replace: true,
+              });
+            }
           })
           .catch(() => {
-            toast.error(t('mail.actionFailedRetry'));
+            if (!disposedRef.current) {
+              toast.error(t('mail.actionFailedRetry'));
+            }
           });
       },
     });
@@ -408,8 +642,14 @@ export function useMessages(
       confirmText: t('mail.emptyMailbox'),
       danger: true,
       action: () => {
+        const context = routeRef.current;
+
         apiFetch(`/api/messages?mailbox=${mailbox}`, { method: 'DELETE' })
           .then(res => {
+            if (disposedRef.current) {
+              return;
+            }
+
             if (!res.ok) {
               toast.error(t('mail.actionFailedRetry'));
 
@@ -421,14 +661,22 @@ export function useMessages(
             refreshList();
             refreshCounts();
 
-            if (route.messageId) {
-              navigate(viewPath(route.view, null, route.q), {
+            const current = routeRef.current;
+
+            if (
+              current.view === mailbox &&
+              current.q === context.q &&
+              current.messageId
+            ) {
+              navigate(viewPath(mailbox, null, current.q), {
                 replace: true,
               });
             }
           })
           .catch(() => {
-            toast.error(t('mail.actionFailedRetry'));
+            if (!disposedRef.current) {
+              toast.error(t('mail.actionFailedRetry'));
+            }
           });
       },
     });
@@ -444,7 +692,9 @@ export function useMessages(
     counts,
     refreshCounts,
     openMessage,
+    messageLoading,
     refreshList,
+    syncOpenMessage,
     discardDraft,
     downloadMessage,
     importMessages,
