@@ -8,6 +8,7 @@ import {
 } from '#/limits';
 import { parseRecipients, validRecipients } from '#/recipients';
 
+import { copyAttachments } from './attachments';
 import type { AuthUser } from './auth';
 import { chunks, DB_PARAM_LIMIT, deleteObjects } from './batch';
 import { badRequest, jsonError, notFound, readJson } from './http';
@@ -352,6 +353,115 @@ async function pruneDraftImages(
   }
 }
 
+interface TemplateDraftRow {
+  subject: string;
+  body_html: string;
+  body_source: string;
+}
+
+/**
+ * 用模板创建草稿。附件复制到草稿自身，模板后续删除不影响已创建的邮件。
+ */
+async function createDraftFromTemplate(
+  env: Env,
+  user: AuthUser,
+  templateId: string,
+): Promise<Response> {
+  const template = await env.DB.prepare(
+    `SELECT subject, body_html, body_source
+     FROM templates
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(templateId, user.id)
+    .first<TemplateDraftRow>();
+
+  if (!template) {
+    return notFound();
+  }
+
+  const id = crypto.randomUUID();
+
+  if (
+    rowTooLarge([
+      id,
+      user.id,
+      'drafts',
+      'outbound',
+      0,
+      user.email,
+      '',
+      '',
+      template.subject,
+      '',
+      template.body_html,
+      template.body_source,
+      '',
+      '',
+      '',
+      '',
+      '0000-00-00 00:00:00',
+      '0000-00-00 00:00:00',
+    ])
+  ) {
+    return badRequest('message too large');
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO messages (
+       id, user_id, mailbox, direction, from_address, to_address, subject,
+       body_text, body_html, body_source
+     ) VALUES (?, ?, 'drafts', 'outbound', ?, '', ?, '', ?, ?)`,
+  )
+    .bind(
+      id,
+      user.id,
+      user.email,
+      template.subject,
+      template.body_html,
+      template.body_source,
+    )
+    .run();
+
+  try {
+    const copied = await copyAttachments(
+      env,
+      user.id,
+      { messageId: id },
+      template.body_html,
+      template.body_source,
+    );
+
+    if (copied instanceof Response) {
+      await purgeMessages(env, [id]).catch(() => {});
+
+      return copied;
+    }
+
+    if (
+      copied.bodyHtml !== template.body_html ||
+      copied.bodySource !== template.body_source
+    ) {
+      await env.DB.prepare(
+        `UPDATE messages SET body_html = ?, body_source = ?
+         WHERE id = ? AND user_id = ?`,
+      )
+        .bind(copied.bodyHtml, copied.bodySource, id, user.id)
+        .run();
+    }
+  } catch (error) {
+    await purgeMessages(env, [id]).catch(() => {});
+
+    throw error;
+  }
+
+  const detail = await messageDetail(env, id, user.id);
+
+  return Response.json(
+    { id, message: detail },
+    { status: 201, headers: { Location: `/api/drafts/${id}` } },
+  );
+}
+
 export async function saveDraft(
   env: Env,
   user: AuthUser,
@@ -367,6 +477,7 @@ export async function saveDraft(
     allowEmpty?: unknown;
     prune?: unknown;
     pruneIds?: unknown;
+    templateId?: unknown;
   }>(request);
 
   if (payload instanceof Response) {
@@ -391,6 +502,17 @@ export async function saveDraft(
       return badRequest('invalid prune ids');
     }
     pruneIds = [...new Set(payload.pruneIds)];
+  }
+
+  if (payload.templateId !== undefined) {
+    if (id) {
+      return badRequest('invalid template');
+    }
+
+    if (typeof payload.templateId !== 'string' || !payload.templateId.trim()) {
+      return badRequest('invalid template');
+    }
+    return createDraftFromTemplate(env, user, payload.templateId);
   }
 
   if (!id && !allowEmpty && !to && !subject && !text && !source.trim()) {

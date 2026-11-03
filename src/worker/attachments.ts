@@ -1,4 +1,8 @@
-import { replaceResourceUrls } from '#/attachment-url';
+import {
+  extractAttachmentIds,
+  replaceAttachmentUrls,
+  replaceResourceUrls,
+} from '#/attachment-url';
 import { EMAIL_MAX_BYTES, MAX_ATTACHMENTS } from '#/limits';
 
 import { badRequest, jsonError, notFound } from './http';
@@ -71,6 +75,100 @@ export function replaceCidImages(
 
     return resolve(url.slice(4));
   });
+}
+
+export type AttachmentTarget = { messageId: string } | { templateId: string };
+
+/**
+ * 把正文引用的附件复制到目标邮件或模板，返回重写后的正文。
+ * 目标必须已经存在，附件归属校验与发送时一致。
+ */
+export async function copyAttachments(
+  env: Env,
+  userId: string,
+  target: AttachmentTarget,
+  bodyHtml: string,
+  bodySource: string,
+): Promise<{ bodyHtml: string; bodySource: string } | Response> {
+  const ids = new Set([
+    ...extractAttachmentIds(bodyHtml),
+    ...extractAttachmentIds(bodySource),
+  ]);
+
+  if (ids.size === 0) {
+    return { bodyHtml, bodySource };
+  }
+
+  const messageTarget = 'messageId' in target;
+  const targetColumn = messageTarget ? 'message_id' : 'template_id';
+  const targetId = messageTarget ? target.messageId : target.templateId;
+  const replacements = new Map<string, string>();
+
+  for (const id of ids) {
+    const attachment = await env.DB.prepare(
+      `SELECT a.filename, a.content_type, a.storage_key
+       FROM attachments a
+       WHERE a.id = ?
+         AND (
+           EXISTS (SELECT 1 FROM messages m WHERE m.id = a.message_id AND m.user_id = ?)
+           OR EXISTS (SELECT 1 FROM templates t WHERE t.id = a.template_id AND t.user_id = ?)
+         )`,
+    )
+      .bind(id, userId, userId)
+      .first<{ filename: string; content_type: string; storage_key: string }>();
+
+    if (!attachment) {
+      return badRequest('attachment not found');
+    }
+
+    const object = await env.ATTACHMENTS.get(attachment.storage_key);
+
+    if (!object) {
+      return badRequest('attachment not found');
+    }
+
+    const newId = crypto.randomUUID();
+    const storageKey = `attachments/${targetId}/${newId}`;
+
+    await env.ATTACHMENTS.put(storageKey, object.body, {
+      httpMetadata: { contentType: attachment.content_type },
+    });
+
+    try {
+      await env.DB.prepare(
+        `INSERT INTO attachments
+           (id, ${targetColumn}, filename, content_type, size_bytes, storage_key)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          newId,
+          targetId,
+          attachment.filename,
+          attachment.content_type,
+          object.size,
+          storageKey,
+        )
+        .run();
+    } catch (error) {
+      await env.ATTACHMENTS.delete(storageKey).catch(() => {});
+
+      throw error;
+    }
+
+    replacements.set(id, newId);
+  }
+
+  const rewrite = (html: string) =>
+    replaceAttachmentUrls(html, id => {
+      const next = replacements.get(id);
+
+      return next ? `/api/attachments/${next}` : null;
+    });
+
+  return {
+    bodyHtml: rewrite(bodyHtml),
+    bodySource: rewrite(bodySource),
+  };
 }
 
 export async function getAttachment(
