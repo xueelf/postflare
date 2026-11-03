@@ -176,6 +176,8 @@ export function InkyComponentDialog({
     }
 
     if (type === 'button') {
+      // Inky 2.0.0-beta.10 的 make_button 只读取 class/size/color，
+      // 不识别裸 rounded/hollow/expand，因此统一写成 class。
       const modifiers = ['rounded', 'hollow', 'expand']
         .filter(name => attrs[name] === '')
         .join(' ');

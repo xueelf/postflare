@@ -298,6 +298,7 @@ function createButtonView(props: NodeViewRendererProps) {
       'inky-button-view',
       attributes.size,
       attributes.color,
+      // 兼容旧源码里的裸 hollow/rounded；新按钮由组件对话框写成 class。
       attributes.hollow === '' && 'hollow',
       attributes.rounded === '' && 'rounded',
       attributes.class,
