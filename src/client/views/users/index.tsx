@@ -254,6 +254,7 @@ function InviteDialog({
   return (
     <Modal
       title={t('users.inviteUser')}
+      size="form"
       onDismiss={busy ? undefined : onDismiss}
       footer={
         <>

@@ -230,6 +230,7 @@ function ChoiceDialog({
   return (
     <Modal
       title={title}
+      size="form"
       onDismiss={() => {
         if (!busy) {
           onClose();
@@ -286,6 +287,7 @@ function TextDialog({
   return (
     <Modal
       title={title}
+      size="form"
       onDismiss={() => {
         if (!busy) {
           onClose();
@@ -354,6 +356,7 @@ function PasswordDialog({
   return (
     <Modal
       title={t(LABEL_KEYS.password)}
+      size="form"
       onDismiss={() => {
         if (!busy) {
           onClose();

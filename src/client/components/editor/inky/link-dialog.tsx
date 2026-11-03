@@ -53,6 +53,7 @@ export function LinkDialog({
   return (
     <Modal
       title={t('compose.insertLink')}
+      size="form"
       onDismiss={onDismiss}
       footer={
         <>

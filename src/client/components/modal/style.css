@@ -1,6 +1,10 @@
 .modal {
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 48px);
+  --modal-width-compact: 400px;
+  --modal-width-form: 500px;
+  --modal-width-wide: 560px;
+  --modal-max-height: calc(100dvh - 2 * var(--page-gap));
+  max-width: calc(100vw - 2 * var(--page-gap));
+  max-height: var(--modal-max-height);
   box-shadow: var(--shadow-md);
   overflow: hidden;
 }
@@ -10,10 +14,14 @@
   flex-direction: column;
 }
 
-/* 尺寸分三档，sm 用于消息与表单类，lg 用于固定高度的编辑类，page 用于高度随内容的列表类，
-   窄屏规则用 .modal 提高一级，避免被各页面自己的尺寸规则盖掉。 */
+/* 尺寸按内容类型分档：确认与短消息用 400，表单用 500，列表用 560，
+   固定高度编辑类用 lg，窄屏规则用 .modal 提高一级，避免被各页面自己的尺寸规则盖掉。 */
 .modal-sm {
-  width: 400px;
+  width: var(--modal-width-compact);
+}
+
+.modal-form {
+  width: var(--modal-width-form);
 }
 
 .modal-lg {
@@ -22,7 +30,7 @@
 }
 
 .modal-page {
-  width: 640px;
+  width: var(--modal-width-wide);
 }
 
 @media (max-width: 920px) {
@@ -45,6 +53,7 @@
   min-height: 0;
   padding: 16px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .dialog-head + .modal-body {

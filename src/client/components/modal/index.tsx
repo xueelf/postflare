@@ -10,7 +10,7 @@ import { DialogHead } from '#/client/components/dialog-head';
 
 export interface ModalProps {
   title: string;
-  size?: 'sm' | 'lg' | 'page';
+  size?: 'sm' | 'form' | 'lg' | 'page';
   onDismiss?: () => void;
   footer?: ReactNode;
   children: ReactNode;

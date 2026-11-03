@@ -211,6 +211,7 @@ export function InkyComponentDialog({
   return (
     <Modal
       title={t(definition.label)}
+      size="form"
       onDismiss={onDismiss}
       footer={
         <>
