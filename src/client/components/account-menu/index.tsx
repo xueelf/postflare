@@ -1,4 +1,9 @@
-import { RiFileTextLine, RiLogoutBoxRLine, RiMailLine } from '@remixicon/react';
+import {
+  RiFileEditLine,
+  RiFileTextLine,
+  RiLogoutBoxRLine,
+  RiMailLine,
+} from '@remixicon/react';
 import { useRef } from 'react';
 
 import { Avatar } from '#/client/components/avatar';
@@ -11,6 +16,7 @@ import './style.css';
 export interface AccountMenuProps {
   id: string;
   user: { name: string; email: string };
+  onOpenTemplatePicker: () => void;
   onImportEmail: (files: File[]) => void;
   onImportTemplate: (files: File[]) => void;
   onLogout: () => void;
@@ -22,6 +28,7 @@ export interface AccountMenuProps {
 export function AccountMenu({
   id,
   user,
+  onOpenTemplatePicker,
   onImportEmail,
   onImportTemplate,
   onLogout,
@@ -48,6 +55,16 @@ export function AccountMenu({
           </>
         }
       >
+        <button
+          type="button"
+          className="popover-item"
+          popoverTarget={id}
+          popoverTargetAction="hide"
+          onClick={onOpenTemplatePicker}
+        >
+          <RiFileEditLine size={20} aria-hidden />
+          <span>{t('ui.useTemplate')}</span>
+        </button>
         <button
           type="button"
           className="popover-item"

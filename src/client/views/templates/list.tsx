@@ -18,6 +18,7 @@ export interface TemplateListProps {
   collapsed: boolean;
   onToggleSidebar: () => void;
   user: { name: string; email: string };
+  onOpenTemplatePicker: () => void;
   onImportEmail: (files: File[]) => void;
   onImportTemplate: (files: File[]) => void;
   onLogout: () => void;
@@ -36,6 +37,7 @@ export function TemplateList({
   collapsed,
   onToggleSidebar,
   user,
+  onOpenTemplatePicker,
   onImportEmail,
   onImportTemplate,
   onLogout,
@@ -70,6 +72,7 @@ export function TemplateList({
         searchPlaceholder={t('templates.search')}
         accountMenuId="account-menu-templates"
         user={user}
+        onOpenTemplatePicker={onOpenTemplatePicker}
         onImportEmail={onImportEmail}
         onImportTemplate={onImportTemplate}
         onLogout={onLogout}

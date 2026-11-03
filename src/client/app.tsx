@@ -13,6 +13,7 @@ import { Button } from './components/button';
 import { ConfirmDialog } from './components/confirm-dialog';
 import { Modal } from './components/modal';
 import { Notice } from './components/notice';
+import { TemplatePicker } from './components/template-picker';
 import { displayName } from './format';
 import { useAuth } from './hooks/use-auth';
 import { useComposeWindows } from './hooks/use-compose-windows';
@@ -90,6 +91,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     ),
   );
   const composeWindows = useComposeWindows();
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -113,6 +115,26 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
         apiFetch(`/api/templates/${id}`, { method: 'DELETE' }),
       ),
   });
+  const startFromTemplate = async (templateId: string): Promise<boolean> => {
+    const draftId = await templates.createDraftFromTemplate(templateId);
+
+    if (!draftId) {
+      return false;
+    }
+    shell.closeDrawer();
+    composeWindows.openDraft(draftId);
+
+    if (view === 'drafts') {
+      messages.refreshList();
+    }
+    messages.refreshCounts();
+
+    return true;
+  };
+  const openTemplatePicker = () => {
+    shell.closeDrawer();
+    setTemplatePickerOpen(true);
+  };
   const { theme, setTheme } = useTheme();
   const [logoutPrompt, setLogoutPrompt] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
@@ -256,6 +278,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
     onToggleSidebar: shell.toggleSidebar,
     onMenu: openMenu,
     user,
+    onOpenTemplatePicker: openTemplatePicker,
     onImportEmail: messages.importMessages,
     onImportTemplate: templates.importTemplates,
     onLogout: logout,
@@ -336,6 +359,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
             collapsed={shell.sidebarCollapsed}
             onToggleSidebar={shell.toggleSidebar}
             user={user}
+            onOpenTemplatePicker={openTemplatePicker}
             onImportEmail={messages.importMessages}
             onImportTemplate={templates.importTemplates}
             onLogout={logout}
@@ -382,6 +406,7 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
         shell.closeDrawer();
         composeWindows.openNew();
       }}
+      onOpenTemplatePicker={openTemplatePicker}
       onImportEmail={messages.importMessages}
       onImportTemplate={templates.importTemplates}
       onOpenSettings={openSettings}
@@ -569,6 +594,18 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
           passwordBusy={auth.passwordBusy}
           onSaveProfile={auth.updateProfile}
           onSavePassword={auth.changePassword}
+        />
+      )}
+      {templatePickerOpen && (
+        <TemplatePicker
+          templates={templates.templates}
+          onClose={() => setTemplatePickerOpen(false)}
+          onManage={() => {
+            setTemplatePickerOpen(false);
+            shell.closeDrawer();
+            navigate('/templates');
+          }}
+          onUse={startFromTemplate}
         />
       )}
       {confirm.confirm && (

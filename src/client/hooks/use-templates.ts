@@ -35,6 +35,7 @@ interface MessageTemplateSource {
 // 服务端错误码 → 文案键
 const TEMPLATE_ERRORS: Record<string, MessageKey> = {
   'attachment not found': 'templates.attachmentMissing',
+  'message too large': 'compose.errorTooLarge',
   'subject too long': 'compose.errorSubjectTooLong',
   'template too large': 'templates.tooLarge',
 };
@@ -271,6 +272,51 @@ export function useTemplates(
     });
   };
 
+  const createDraftFromTemplate = async (
+    templateId: string,
+  ): Promise<string | null> => {
+    try {
+      const response = await apiFetch('/api/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId }),
+        signal: abortRef.current.signal,
+      });
+
+      if (disposedRef.current) {
+        return null;
+      }
+
+      if (response.status === 404) {
+        toast.error(t('templates.deleted'));
+        refreshTemplates();
+
+        return null;
+      }
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        const key = data.error ? TEMPLATE_ERRORS[data.error] : undefined;
+
+        toast.error(key ? t(key) : t('templates.useFailed'));
+
+        return null;
+      }
+
+      const data = (await response.json()) as { id: string };
+
+      return disposedRef.current ? null : data.id;
+    } catch {
+      if (!disposedRef.current) {
+        toast.error(t('templates.useFailed'));
+      }
+
+      return null;
+    }
+  };
+
   const removeTemplate = (id: string) => {
     askConfirm({
       title: t('templates.confirmDelete'),
@@ -329,6 +375,7 @@ export function useTemplates(
     refreshTemplates,
     importTemplates,
     saveMessageAsTemplate,
+    createDraftFromTemplate,
     removeTemplate,
   };
 }

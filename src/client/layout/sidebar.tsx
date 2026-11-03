@@ -28,6 +28,7 @@ export interface SidebarProps {
   settingsOpen: boolean;
   onNavigate: (view: View) => void;
   onCompose: () => void;
+  onOpenTemplatePicker: () => void;
   onImportEmail: (files: File[]) => void;
   onImportTemplate: (files: File[]) => void;
   onOpenSettings: () => void;
@@ -99,6 +100,7 @@ export function Sidebar({
   settingsOpen,
   onNavigate,
   onCompose,
+  onOpenTemplatePicker,
   onImportEmail,
   onImportTemplate,
   onOpenSettings,
@@ -112,6 +114,7 @@ export function Sidebar({
         <AccountMenu
           id="account-menu"
           user={user}
+          onOpenTemplatePicker={onOpenTemplatePicker}
           onImportEmail={onImportEmail}
           onImportTemplate={onImportTemplate}
           onLogout={onLogout}
