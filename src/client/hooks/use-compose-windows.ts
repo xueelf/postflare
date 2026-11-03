@@ -24,7 +24,8 @@ export function useComposeWindows() {
   const saveActionsRef = useRef(new Map<string, () => Promise<boolean>>());
 
   const clampPosition = (x: number, y: number) => {
-    const width = Math.min(680, window.innerWidth - 32);
+    // 与 compose-window.css 的宽度保持一致
+    const width = Math.min(720, window.innerWidth - 32);
     const maxX = Math.max(0, window.innerWidth - width);
     const maxY = Math.max(0, window.innerHeight - 48);
 
@@ -38,8 +39,9 @@ export function useComposeWindows() {
     windows.filter(window => !window.minimized).length;
 
   const position = (count: number) => {
-    const width = Math.min(680, window.innerWidth - 32);
-    const height = Math.min(600, window.innerHeight * 0.82);
+    const width = Math.min(720, window.innerWidth - 32);
+    // 与 compose-window.css 的初始高度保持一致
+    const height = Math.min(600, window.innerHeight - 32);
     const offset = (count % 4) * 24;
 
     // 桌面端从视口中心开始，多个窗口保留少量层叠偏移

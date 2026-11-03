@@ -1,10 +1,12 @@
+/* 写信是表单，宽度取桌面写信窗口常见的 600–800 区间内的 720，固定高度 600 约容纳 20 行正文 */
 .compose-window {
   position: fixed;
   display: flex;
   flex-direction: column;
-  width: min(680px, calc(100vw - 32px));
-  min-height: min(600px, 82vh);
-  max-height: min(82vh, 760px);
+  width: 720px;
+  height: 600px;
+  max-width: calc(100vw - 2 * var(--page-gap));
+  max-height: calc(100dvh - 2 * var(--page-gap));
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-container);
@@ -272,6 +274,7 @@
 .compose-window-fullscreen {
   inset: 0;
   width: auto;
+  height: auto;
   min-height: 0;
   max-height: none;
   border: 0;
@@ -296,6 +299,7 @@
   .compose-window {
     inset: 0;
     width: auto;
+    height: auto;
     min-height: 0;
     max-height: none;
     border: 0;
