@@ -34,7 +34,7 @@
     "@tiptap/core": "^3.32.0",
     "@tiptap/extensions": "^3.32.0",
     "@tiptap/react": "^3.32.2",
-    "@tiptap/starter-kit": "^3.32.2",
+    "@tiptap/starter-kit": "^3.33.0",
     "codemirror": "^6.0.2",
     "dompurify": "^3.4.17",
     "mimetext": "^3.0.28",
