@@ -9,6 +9,8 @@ const LIST_PAGE_SIZE = 30;
 const MAILBOXES = ['inbox', 'sent', 'drafts', 'spam', 'trash'];
 const MOVE_TARGETS = ['inbox', 'sent', 'spam', 'trash'];
 const EMPTY_TARGETS = ['spam', 'trash'];
+// 永久删除先在 D1 写入该哨兵时间戳，立即对列表/详情/恢复不可见，R2 失败时由定时任务继续清理
+const PURGING_UPDATED_AT = '0000-00-00 00:00:00';
 
 function allowedMoves(current: {
   mailbox: string;
@@ -105,7 +107,7 @@ export async function listMessages(
     `SELECT id, mailbox, direction, seen, from_address, from_name, to_address, subject,
             created_at, updated_at, rowid AS row_id
      FROM messages
-     WHERE user_id = ? AND mailbox = ? ${searchClause} ${cursorClause}
+     WHERE user_id = ? AND mailbox = ? AND updated_at <> '${PURGING_UPDATED_AT}' ${searchClause} ${cursorClause}
      ORDER BY ${order} DESC, rowid DESC
      LIMIT ${LIST_PAGE_SIZE + 1}`,
   );
@@ -164,7 +166,7 @@ export async function messageDetail(
     .bind(id, userId)
     .first<MessageRow>();
 
-  if (!message) {
+  if (!message || message.updated_at === PURGING_UPDATED_AT) {
     return null;
   }
 
@@ -421,16 +423,34 @@ export async function purgeMessage(
   userId: string,
 ): Promise<Response> {
   const owned = await env.DB.prepare(
-    'SELECT id FROM messages WHERE id = ? AND user_id = ?',
+    'SELECT id, mailbox, updated_at FROM messages WHERE id = ? AND user_id = ?',
   )
     .bind(id, userId)
-    .first();
+    .first<{ id: string; mailbox: string; updated_at: string }>();
 
-  if (!owned) {
+  if (!owned || owned.updated_at === PURGING_UPDATED_AT) {
     return notFound();
   }
 
-  await purgeMessages(env, [id]);
+  if (!EMPTY_TARGETS.includes(owned.mailbox)) {
+    return badRequest('invalid mailbox');
+  }
+
+  const claimed = await env.DB.prepare(
+    `UPDATE messages
+     SET updated_at = ?
+     WHERE id = ? AND user_id = ? AND mailbox IN ('spam', 'trash') AND updated_at <> ?`,
+  )
+    .bind(PURGING_UPDATED_AT, id, userId, PURGING_UPDATED_AT)
+    .run();
+
+  if (claimed.meta.changes === 0) {
+    return notFound();
+  }
+
+  await purgeMessages(env, [id]).catch(error => {
+    console.error('failed to purge message objects', error);
+  });
 
   return Response.json({ ok: true });
 }
@@ -446,18 +466,28 @@ export async function emptyMailbox(
     return badRequest('invalid mailbox');
   }
 
-  const { results } = await env.DB.prepare(
-    'SELECT id FROM messages WHERE mailbox = ? AND user_id = ?',
+  await env.DB.prepare(
+    `UPDATE messages
+     SET updated_at = ?
+     WHERE mailbox = ? AND user_id = ? AND updated_at <> ?`,
   )
-    .bind(mailbox, userId)
+    .bind(PURGING_UPDATED_AT, mailbox, userId, PURGING_UPDATED_AT)
+    .run();
+
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM messages
+     WHERE mailbox = ? AND user_id = ? AND updated_at = ?`,
+  )
+    .bind(mailbox, userId, PURGING_UPDATED_AT)
     .all<{ id: string }>();
 
-  const purged = await purgeMessages(
-    env,
-    results.map(row => row.id),
-  );
+  const ids = results.map(row => row.id);
 
-  return Response.json({ purged });
+  await purgeMessages(env, ids).catch(error => {
+    console.error('failed to purge mailbox objects', error);
+  });
+
+  return Response.json({ purged: ids.length });
 }
 
 /**
@@ -501,11 +531,23 @@ export async function purgeUserData(env: Env, userId: string): Promise<void> {
 }
 
 export async function purgeExpired(env: Env): Promise<number> {
+  await env.DB.prepare(
+    `UPDATE messages
+     SET updated_at = ?
+     WHERE mailbox IN ('spam', 'trash')
+       AND updated_at < datetime('now', '-${MAIL_RETENTION_DAYS} days')
+       AND updated_at <> ?`,
+  )
+    .bind(PURGING_UPDATED_AT, PURGING_UPDATED_AT)
+    .run();
+
   const { results } = await env.DB.prepare(
     `SELECT id FROM messages
      WHERE mailbox IN ('spam', 'trash')
-       AND updated_at < datetime('now', '-${MAIL_RETENTION_DAYS} days')`,
-  ).all<{ id: string }>();
+       AND updated_at = ?`,
+  )
+    .bind(PURGING_UPDATED_AT)
+    .all<{ id: string }>();
 
   return purgeMessages(
     env,
@@ -521,6 +563,7 @@ export async function getFolderCounts(
     `SELECT mailbox, seen, COUNT(*) AS count
      FROM messages
      WHERE user_id = ? AND mailbox IN ('inbox', 'drafts', 'spam')
+       AND updated_at <> '${PURGING_UPDATED_AT}'
      GROUP BY mailbox, seen`,
   )
     .bind(userId)

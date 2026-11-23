@@ -30,7 +30,7 @@ const INVITE_LINK_PATH = '/invite/';
 const LINK_SUFFIX = '/link';
 const RESET_TTL_SECONDS = 60 * 60;
 // 链接令牌 8 位人类可读字符，约 46 位随机数。个人部署并发低，链接又有 24 小时有效期与人数上限，
-// 在线爆破拿不到收益，用更短更好分享的码；低于 OWASP 对长期会话标识 64 位熵的建议是刻意的取舍
+// 在线爆破拿不到收益，用更短更好分享的码，低于 OWASP 对长期会话标识 64 位熵的建议是刻意的取舍
 const TOKEN_LENGTH = 8;
 // 客户端与服务端时钟可能有偏差，签发上限校验留出余量
 const INVITE_EXPIRY_GRACE_SECONDS = 5 * 60;
@@ -223,6 +223,15 @@ async function deleteUser(
   if (!target) {
     return notFound();
   }
+
+  // 先停用账号并撤销会话与一次性令牌，阻止清理 R2 期间产生新的入站邮件或写操作
+  await env.DB.batch([
+    env.DB.prepare("UPDATE users SET status = 'disabled' WHERE id = ?").bind(
+      id,
+    ),
+    env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM user_tokens WHERE user_id = ?').bind(id),
+  ]);
 
   await purgeUserData(env, id);
   await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run();
