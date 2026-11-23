@@ -17,7 +17,7 @@
   white-space: nowrap;
 }
 
-/* 空状态要能撑满内容区居中；左右留白放在滚动容器外，滚动内容不会越过留白 */
+/* 空状态要能撑满内容区居中，左右留白放在滚动容器外，滚动内容不会越过留白 */
 .users-pane .panel-body {
   display: flex;
   flex-direction: column;

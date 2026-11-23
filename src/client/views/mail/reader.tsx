@@ -8,6 +8,7 @@ import {
   RiFileTextLine,
   RiInboxLine,
   RiInboxUnarchiveLine,
+  RiLoader4Line,
   RiMailForbidLine,
   RiMailLine,
 } from '@remixicon/react';
@@ -27,6 +28,7 @@ import type { View } from '#/client/route';
 export interface ReaderProps {
   message: MessageDetail | null;
   loading: boolean;
+  pendingIds: ReadonlySet<string>;
   view: View;
   accountName: string;
   accountEmail: string;
@@ -45,6 +47,7 @@ export interface ReaderProps {
 export function Reader({
   message,
   loading,
+  pendingIds,
   view,
   accountName,
   accountEmail,
@@ -57,6 +60,7 @@ export function Reader({
   onPurge,
 }: ReaderProps) {
   const { locale, t } = useI18n();
+  const pending = message ? pendingIds.has(message.id) : false;
   const { emailDocument, allowRemote, allowRemoteContent } = useEmailBody(
     message?.body_html ?? '',
     message?.id ?? '',
@@ -158,7 +162,11 @@ export function Reader({
   }
 
   return (
-    <section className="panel reader-pane" aria-label={t('mail.reader')}>
+    <section
+      className="panel reader-pane"
+      aria-label={t('mail.reader')}
+      aria-busy={pending || undefined}
+    >
       <div className="reader-head">
         <Button
           variant="icon"
@@ -169,72 +177,86 @@ export function Reader({
           <RiArrowLeftLine size={20} aria-hidden />
         </Button>
         <h2>{message.subject || t('mail.noSubject')}</h2>
-        <ActionMenu className="reader-actions" items={actions} />
+        <ActionMenu
+          className="reader-actions"
+          items={actions}
+          disabled={pending}
+        />
       </div>
       <hr />
-      <MessageView
-        avatarName={correspondent}
-        correspondent={correspondent}
-        addr={
-          message.direction === 'outbound'
-            ? accountEmail
-            : message.from_name
-              ? message.from_address
+      <div className="reader-body">
+        <MessageView
+          avatarName={correspondent}
+          correspondent={correspondent}
+          addr={
+            message.direction === 'outbound'
+              ? accountEmail
+              : message.from_name
+                ? message.from_address
+                : undefined
+          }
+          when={formatDate(message.created_at, locale)}
+          dateTime={dateTimeValue(message.created_at)}
+          detailsId="message-details"
+          remoteContent={
+            emailDocument.hasRemoteContent && !allowRemote
+              ? allowRemoteContent
               : undefined
-        }
-        when={formatDate(message.created_at, locale)}
-        dateTime={dateTimeValue(message.created_at)}
-        detailsId="message-details"
-        remoteContent={
-          emailDocument.hasRemoteContent && !allowRemote
-            ? allowRemoteContent
-            : undefined
-        }
-      >
-        <dl id="message-details" popover="auto" className="message-details">
-          <dt>{t('mail.from')}</dt>
-          <dd>{message.from_address}</dd>
-          <dt>{t('mail.to')}</dt>
-          <dd>{message.to_address}</dd>
-          <dt>{t('mail.subject')}</dt>
-          <dd>{message.subject || t('mail.noSubject')}</dd>
-          <dt>{t('mail.date')}</dt>
-          <dd>{formatDate(message.created_at, locale)}</dd>
-        </dl>
-        {message.attachments.length > 0 && (
-          <ul className="attachments">
-            {message.attachments.map(file => (
-              <li key={file.id}>
-                <a
-                  href={`/api/attachments/${file.id}`}
-                  download={file.filename}
-                >
-                  <RiAttachmentLine size={14} aria-hidden />
-                  {file.filename}
-                </a>
-                <span className="meta">{formatSize(file.size_bytes)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {message.body_html ? (
-          <BodyFrame
-            key={message.id}
-            srcDoc={emailDocument.html}
-            title={t('mail.body')}
-          />
-        ) : (
-          <>
-            <pre className="body-text">{quote.visible || t('mail.noBody')}</pre>
-            {quote.quoted && (
-              <details className="quote">
-                <summary>{t('mail.showQuoted')}</summary>
-                <pre className="body-text quoted">{quote.quoted}</pre>
-              </details>
-            )}
-          </>
-        )}
-      </MessageView>
+          }
+        >
+          <dl id="message-details" popover="auto" className="message-details">
+            <dt>{t('mail.from')}</dt>
+            <dd>{message.from_address}</dd>
+            <dt>{t('mail.to')}</dt>
+            <dd>{message.to_address}</dd>
+            <dt>{t('mail.subject')}</dt>
+            <dd>{message.subject || t('mail.noSubject')}</dd>
+            <dt>{t('mail.date')}</dt>
+            <dd>{formatDate(message.created_at, locale)}</dd>
+          </dl>
+          {message.attachments.length > 0 && (
+            <ul className="attachments">
+              {message.attachments.map(file => (
+                <li key={file.id}>
+                  <a
+                    href={`/api/attachments/${file.id}`}
+                    download={file.filename}
+                  >
+                    <RiAttachmentLine size={14} aria-hidden />
+                    {file.filename}
+                  </a>
+                  <span className="meta">{formatSize(file.size_bytes)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {message.body_html ? (
+            <BodyFrame
+              key={message.id}
+              srcDoc={emailDocument.html}
+              title={t('mail.body')}
+            />
+          ) : (
+            <>
+              <pre className="body-text">
+                {quote.visible || t('mail.noBody')}
+              </pre>
+              {quote.quoted && (
+                <details className="quote">
+                  <summary>{t('mail.showQuoted')}</summary>
+                  <pre className="body-text quoted">{quote.quoted}</pre>
+                </details>
+              )}
+            </>
+          )}
+        </MessageView>
+        {pending ? (
+          <div className="reader-pending" role="status">
+            <RiLoader4Line className="mail-spin" size={16} aria-hidden />
+            {t('common.loading')}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

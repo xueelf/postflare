@@ -7,7 +7,7 @@ export interface BodyFrameProps {
 
 /**
  * 邮件正文 iframe：白底渲染，高度跟着内容走，滚动交给外层容器，避免出现内层滚动条。
- * 沙箱只放行同源读取和弹窗，脚本、表单、顶层跳转全部禁止；远程资源由 CSP 拦截。
+ * 沙箱只放行同源读取和弹窗，脚本、表单、顶层跳转全部禁止，远程资源由 CSP 拦截。
  * 文档由 useEmailBody 预先构建，这里只负责挂载和测高。
  */
 export function BodyFrame({ srcDoc, title }: BodyFrameProps) {

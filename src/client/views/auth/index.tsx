@@ -68,16 +68,7 @@ export function Auth({
   // 向导内以所选语言渲染，登录界面跟随全局语言
   const uiLocale = setupComplete ? locale : language;
   const t = (key: MessageKey) => translate(uiLocale, key);
-
-  // 昵称自动建议用户名，留空时用建议值
-  const suggestion =
-    name
-      .trim()
-      .split(/\s+/)[0]
-      ?.toLowerCase()
-      .replace(/[^a-z0-9]/g, '') ?? '';
-  const cleanUsername =
-    username.trim().toLowerCase().replace(/@.*$/, '') || suggestion;
+  const clean = username.trim();
   const domainReady = Boolean(domain?.receiving && domain?.sending);
   // 校验失败只给一行状态，配置细节放在问号弹窗里
   const domainIssue = !domain
@@ -94,7 +85,7 @@ export function Auth({
     event.preventDefault();
 
     onSubmit({
-      username: cleanUsername,
+      username: clean,
       password,
       name: name.trim(),
       language,
@@ -244,9 +235,9 @@ export function Auth({
                 label={
                   <>
                     <span>{t('auth.username')}</span>
-                    {mailDomain && (
+                    {mailDomain && clean && (
                       <span className="form-ref">
-                        {cleanUsername || 'me'}@{mailDomain}
+                        {clean}@{mailDomain}
                       </span>
                     )}
                   </>
@@ -256,7 +247,6 @@ export function Auth({
                   value={username}
                   required
                   autoComplete="username"
-                  placeholder={suggestion || 'me'}
                   onChange={event => setUsername(event.target.value)}
                 />
               </FormItem>

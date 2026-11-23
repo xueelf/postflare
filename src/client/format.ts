@@ -89,7 +89,3 @@ export function htmlToText(html: string): string {
 export function displayName(user: { name: string; email: string }): string {
   return user.name.trim() || user.email;
 }
-
-/**
- * 文件或 Blob 转 data URL。
- */

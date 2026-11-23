@@ -1,3 +1,46 @@
+.mail-spin {
+  animation: mail-spin 1s linear infinite;
+}
+
+@keyframes mail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.row-top .mail-spin {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.list-body button.pending {
+  cursor: progress;
+}
+
+.reader-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.reader-pending {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-container);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .list-body .unread .correspondent {
   color: var(--accent);
 }

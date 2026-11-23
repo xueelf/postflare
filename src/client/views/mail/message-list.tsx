@@ -1,4 +1,4 @@
-import { RiMailLine } from '@remixicon/react';
+import { RiLoader4Line, RiMailLine } from '@remixicon/react';
 import { useEffect, useRef } from 'react';
 
 import { EmptyState } from '#/client/components/empty-state';
@@ -13,7 +13,9 @@ export interface MessageListProps {
   view: View;
   messages: MessageSummary[];
   nextCursor: string | null;
+  listLoading: boolean;
   loadingMore: boolean;
+  pendingIds: ReadonlySet<string>;
   onLoadMore: () => void;
   search: string;
   onSearch: (value: string) => void;
@@ -48,7 +50,9 @@ export function MessageList({
   view,
   messages,
   nextCursor,
+  listLoading,
   loadingMore,
+  pendingIds,
   onLoadMore,
   search,
   onSearch,
@@ -107,7 +111,11 @@ export function MessageList({
         onImportTemplate={onImportTemplate}
         onLogout={onLogout}
       />
-      {messages.length === 0 ? (
+      {listLoading ? (
+        <EmptyState icon={<RiLoader4Line className="mail-spin" aria-hidden />}>
+          {t('common.loading')}
+        </EmptyState>
+      ) : messages.length === 0 ? (
         <EmptyState icon={<RiMailLine aria-hidden />}>{emptyText}</EmptyState>
       ) : (
         <ul className="list-body">
@@ -123,6 +131,7 @@ export function MessageList({
                 key={message.id}
                 selected={selected}
                 unread={unread}
+                pending={pendingIds.has(message.id)}
                 title={correspondent(message, t)}
                 subtitle={
                   message.direction === 'inbound' && message.from_name

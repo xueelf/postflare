@@ -265,7 +265,9 @@ function AppShell({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const mailProps: Omit<MailProps, 'view'> = {
     messages: messages.messages,
     nextCursor: messages.nextCursor,
+    listLoading: messages.listLoading,
     loadingMore: messages.loadingMore,
+    pendingIds: messages.pendingIds,
     onLoadMore: messages.loadMore,
     search: messages.search,
     onSearch: messages.setSearch,

@@ -1,7 +1,10 @@
+import { RiLoader4Line } from '@remixicon/react';
+
 export interface ListRowProps {
   selected: boolean;
   /** 未读态，邮件列表按文件夹与 seen 决定，模板列表不传 */
   unread?: boolean;
+  pending?: boolean;
   title: string;
   subtitle?: string;
   text: string;
@@ -16,6 +19,7 @@ export interface ListRowProps {
 export function ListRow({
   selected,
   unread,
+  pending,
   title,
   subtitle,
   text,
@@ -25,6 +29,7 @@ export function ListRow({
 }: ListRowProps) {
   const classes = [
     selected ? 'selected' : '',
+    pending ? 'pending' : '',
     unread === undefined ? '' : unread ? 'unread' : 'read',
   ]
     .filter(Boolean)
@@ -36,12 +41,18 @@ export function ListRow({
         type="button"
         className={classes || undefined}
         aria-current={selected ? 'true' : undefined}
+        aria-busy={pending || undefined}
+        disabled={pending}
         onClick={onOpen}
       >
         <span className="row-main">
           <span className="row-top">
             <span className="correspondent">{title}</span>
-            <time dateTime={dateTime}>{when}</time>
+            {pending ? (
+              <RiLoader4Line className="mail-spin" size={14} aria-hidden />
+            ) : (
+              <time dateTime={dateTime}>{when}</time>
+            )}
           </span>
           {subtitle && (
             <span className="correspondent-address">{subtitle}</span>

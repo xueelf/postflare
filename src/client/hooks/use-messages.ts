@@ -64,10 +64,15 @@ export function useMessages(
   const [search, setSearchState] = useState(route.q);
   const [listRevision, setListRevision] = useState(0);
   const [messages, setMessages] = useState<MessageSummary[]>([]);
+  const [messagesKey, setMessagesKey] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   // 列表、游标和产生它们的查询必须一致
-  const listKey = `${route.view}|${route.q}|${listRevision}`;
+  const queryKey = `${route.view}|${route.q}`;
+  const listKey = `${queryKey}|${listRevision}`;
   const listKeyRef = useRef(listKey);
   const cursorKeyRef = useRef('');
   const loadingMoreRef = useRef(false);
@@ -88,6 +93,17 @@ export function useMessages(
   routeRef.current = route;
   navigateRef.current = navigate;
   listKeyRef.current = listKey;
+
+  const listLoading =
+    ready && MAILBOX_VIEWS.includes(route.view) && messagesKey !== queryKey;
+  const visibleMessages = messagesKey === queryKey ? messages : [];
+  const visibleNextCursor = messagesKey === queryKey ? nextCursor : null;
+  const visibleOpenMessage =
+    openMessage &&
+    openMessage.id === route.messageId &&
+    openMessage.mailbox === route.view
+      ? openMessage
+      : null;
 
   const refreshCounts = () =>
     apiFetch('/api/counts')
@@ -197,6 +213,7 @@ export function useMessages(
     const controller = new AbortController();
     const suffix = route.q ? `&q=${encodeURIComponent(route.q)}` : '';
     const key = listKey;
+    const query = queryKey;
 
     // 新查询首页返回前不允许继续使用旧游标
     cursorKeyRef.current = '';
@@ -211,7 +228,12 @@ export function useMessages(
         }
 
         if (!res.ok) {
+          if (listKeyRef.current !== key) {
+            return;
+          }
           toast.error(t('common.loadFailed'));
+          setMessagesKey(query);
+          setNextCursor(null);
 
           return;
         }
@@ -224,10 +246,22 @@ export function useMessages(
           return;
         }
         setMessages(data.messages);
+        setMessagesKey(query);
         setNextCursor(data.next);
         cursorKeyRef.current = key;
       })
-      .catch(() => {});
+      .catch(() => {
+        if (
+          disposedRef.current ||
+          controller.signal.aborted ||
+          listKeyRef.current !== key
+        ) {
+          return;
+        }
+        toast.error(t('common.loadFailed'));
+        setMessagesKey(query);
+        setNextCursor(null);
+      });
 
     return () => controller.abort();
   }, [ready, route.view, route.q, listRevision]);
@@ -398,6 +432,23 @@ export function useMessages(
     return messages[index + 1]?.id ?? messages[index - 1]?.id ?? null;
   };
 
+  const removeMessageFromList = (id: string) => {
+    setMessages(current => current.filter(message => message.id !== id));
+  };
+
+  const setPending = (id: string, active: boolean) => {
+    setPendingIds(current => {
+      const next = new Set(current);
+
+      if (active) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  };
+
   // 只有用户仍停留在操作发起时的邮件与搜索上下文，才自动选择邻居
   const sameMessageContext = (id: string, context: MailRoute) => {
     const current = routeRef.current;
@@ -422,6 +473,8 @@ export function useMessages(
           ? deleteDraft(id)
           : apiFetch(`/api/drafts/${id}`, { method: 'DELETE' });
 
+        setPending(id, true);
+
         request
           .then(res => {
             if (disposedRef.current) {
@@ -439,6 +492,7 @@ export function useMessages(
 
               return;
             }
+            removeMessageFromList(id);
             toast.success(t('mail.draftDiscarded'));
             refreshList();
             refreshCounts();
@@ -451,6 +505,11 @@ export function useMessages(
             if (!disposedRef.current) {
               toast.error(t('mail.actionFailedRetry'));
             }
+          })
+          .finally(() => {
+            if (!disposedRef.current) {
+              setPending(id, false);
+            }
           });
       },
     });
@@ -462,6 +521,8 @@ export function useMessages(
   ) => {
     const context = routeRef.current;
     const next = neighborId(id);
+
+    setPending(id, true);
 
     apiFetch(`/api/messages/${id}`, {
       method: 'PATCH',
@@ -487,6 +548,7 @@ export function useMessages(
 
           return;
         }
+        removeMessageFromList(id);
         toast.success(t(MOVE_TOASTS[mailbox]));
         refreshList();
         refreshCounts();
@@ -498,6 +560,11 @@ export function useMessages(
       .catch(() => {
         if (!disposedRef.current) {
           toast.error(t('mail.actionFailedRetry'));
+        }
+      })
+      .finally(() => {
+        if (!disposedRef.current) {
+          setPending(id, false);
         }
       });
   };
@@ -603,6 +670,8 @@ export function useMessages(
         const context = routeRef.current;
         const next = neighborId(id);
 
+        setPending(id, true);
+
         apiFetch(`/api/messages/${id}`, { method: 'DELETE' })
           .then(res => {
             if (disposedRef.current) {
@@ -614,6 +683,7 @@ export function useMessages(
 
               return;
             }
+            removeMessageFromList(id);
             toast.success(t('mail.purged'));
             refreshList();
             refreshCounts();
@@ -627,6 +697,11 @@ export function useMessages(
           .catch(() => {
             if (!disposedRef.current) {
               toast.error(t('mail.actionFailedRetry'));
+            }
+          })
+          .finally(() => {
+            if (!disposedRef.current) {
+              setPending(id, false);
             }
           });
       },
@@ -685,13 +760,15 @@ export function useMessages(
   return {
     search,
     setSearch,
-    messages,
-    nextCursor,
+    messages: visibleMessages,
+    nextCursor: visibleNextCursor,
+    listLoading,
     loadingMore,
+    pendingIds,
     loadMore,
     counts,
     refreshCounts,
-    openMessage,
+    openMessage: visibleOpenMessage,
     messageLoading,
     refreshList,
     syncOpenMessage,
