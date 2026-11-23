@@ -110,6 +110,9 @@ export function useComposeWindow(deps: ComposeWindowDeps) {
   const uploadingRef = useRef(false);
   const uploadWaitersRef = useRef<Array<() => void>>([]);
   const uploadQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const manualSaveRef = useRef<Promise<void> | null>(null);
+  const manualSaveSnapshotRef = useRef<Snapshot | null>(null);
+  const manualSaveQueuedRef = useRef(false);
   const knownAttachmentIdsRef = useRef<string[]>([]);
   const releaseLockRef = useRef<(() => void) | null>(null);
   const lockAttemptRef = useRef(0);
@@ -175,16 +178,19 @@ export function useComposeWindow(deps: ComposeWindowDeps) {
   const setTo = (value: string) => {
     toRef.current = value;
     setToState(value);
+    setError('');
   };
 
   const setSubject = (value: string) => {
     subjectRef.current = value;
     setSubjectState(value);
+    setError('');
   };
 
   const updateSource = (value: string) => {
     sourceRef.current = value;
     setSourceState(value);
+    setError('');
   };
 
   const acquireLock = (draftId: string): Promise<boolean> => {
@@ -532,25 +538,64 @@ export function useComposeWindow(deps: ComposeWindowDeps) {
     });
   };
 
-  const saveNow = async () => {
-    if (
-      readOnlyRef.current ||
-      missing ||
-      loading ||
-      closingRef.current ||
-      sendingRef.current ||
-      discardingRef.current ||
-      (draftIdRef.current && !loadedRef.current)
-    ) {
-      return;
-    }
-    const id = await saveDraft();
+  const saveNow = (): Promise<void> => {
+    if (manualSaveRef.current) {
+      if (!sameSnapshot(manualSaveSnapshotRef.current, snapshotOf())) {
+        manualSaveQueuedRef.current = true;
+      }
 
-    if (id) {
-      toast.success(
-        t('compose.saved', { time: formatTime(new Date(), locale) }),
-      );
+      return manualSaveRef.current;
     }
+
+    manualSaveQueuedRef.current = true;
+
+    const run = (async () => {
+      let savedId: string | null = null;
+
+      while (manualSaveQueuedRef.current) {
+        manualSaveQueuedRef.current = false;
+
+        if (
+          readOnlyRef.current ||
+          missingRef.current ||
+          loading ||
+          closingRef.current ||
+          sendingRef.current ||
+          discardingRef.current ||
+          (draftIdRef.current && !loadedRef.current)
+        ) {
+          return;
+        }
+        manualSaveSnapshotRef.current = snapshotOf();
+
+        const id = await saveDraft();
+
+        if (!id) {
+          return;
+        }
+        savedId = id;
+      }
+
+      if (savedId) {
+        toast.success(
+          t('compose.saved', { time: formatTime(new Date(), locale) }),
+        );
+      }
+    })();
+
+    manualSaveRef.current = run;
+
+    run
+      .finally(() => {
+        if (manualSaveRef.current === run) {
+          manualSaveRef.current = null;
+          manualSaveSnapshotRef.current = null;
+          manualSaveQueuedRef.current = false;
+        }
+      })
+      .catch(() => {});
+
+    return run;
   };
 
   const saveAndClose = async (): Promise<boolean> => {
@@ -891,7 +936,7 @@ export function useComposeWindow(deps: ComposeWindowDeps) {
           html: compiled.html,
           subject: snapshot.subject,
         },
-        extractAttachmentIds(sourceRef.current),
+        extractAttachmentIds(snapshot.source),
       );
       const uploaded = /\/api\/attachments\/([\w-]+)/.exec(url)?.[1];
 
@@ -962,6 +1007,7 @@ export function useComposeWindow(deps: ComposeWindowDeps) {
       missing ||
       loading ||
       loadFailed ||
+      Boolean(error) ||
       closing ||
       sending ||
       discarding ||
@@ -990,6 +1036,7 @@ export function useComposeWindow(deps: ComposeWindowDeps) {
     missing,
     loading,
     loadFailed,
+    error,
     closing,
     sending,
     discarding,
@@ -1105,5 +1152,3 @@ export function useComposeWindow(deps: ComposeWindowDeps) {
     saveForLogout,
   };
 }
-
-export type ComposeWindowController = ReturnType<typeof useComposeWindow>;

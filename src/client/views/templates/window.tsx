@@ -321,7 +321,7 @@ export function TemplateWindow({
           <input
             className="compose-line"
             value={editor.name}
-            disabled={!editable || editor.saving}
+            disabled={!editable}
             onChange={event => editor.setName(event.target.value)}
             placeholder={t('templates.name')}
             aria-label={t('templates.name')}
@@ -329,7 +329,7 @@ export function TemplateWindow({
           <input
             className="compose-line"
             value={editor.subject}
-            disabled={!editable || editor.saving}
+            disabled={!editable}
             onChange={event => editor.setSubject(event.target.value)}
             placeholder={t('compose.subject')}
             aria-label={t('compose.subject')}
@@ -339,7 +339,7 @@ export function TemplateWindow({
             onChange={editor.updateSource}
             onUploadImage={editor.uploadImage}
             onUploadingChange={editor.setUploading}
-            disabled={!editable || editor.saving}
+            disabled={!editable}
             componentEnd={componentEnd}
             toolbarTarget={toolbarSlot}
             modeTarget={modeSlot}

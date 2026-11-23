@@ -74,6 +74,7 @@ export function useTemplates(
   const disposedRef = useRef(false);
   const abortRef = useRef(new AbortController());
   const routeRef = useRef(route);
+  const refreshVersionRef = useRef(0);
 
   routeRef.current = route;
 
@@ -90,21 +91,26 @@ export function useTemplates(
     return key ? t(key) : t('templates.saveFailed', { status });
   };
 
-  const refreshTemplates = () =>
-    apiFetch('/api/templates')
+  const refreshTemplates = () => {
+    const version = (refreshVersionRef.current += 1);
+
+    return apiFetch('/api/templates')
       .then(async res => {
         if (!res.ok) {
-          toast.error(t('common.loadFailed'));
+          if (!disposedRef.current && version === refreshVersionRef.current) {
+            toast.error(t('common.loadFailed'));
+          }
 
           return;
         }
         const data = await res.json<Template[]>();
 
-        if (!disposedRef.current) {
+        if (!disposedRef.current && version === refreshVersionRef.current) {
           setTemplates(data);
         }
       })
       .catch(() => {});
+  };
 
   useEffect(() => {
     if (ready) {
@@ -219,10 +225,9 @@ export function useTemplates(
 
   const saveMessageAsTemplate = (message: MessageTemplateSource) => {
     const subject = message.subject.trim();
-    const body = message.body_html;
     const source = message.body_source;
 
-    if (!body || !source) {
+    if (!source || !source.trim()) {
       toast.error(t('templates.noBody'));
 
       return;
@@ -239,13 +244,20 @@ export function useTemplates(
         return;
       }
 
+      // 始终从完整 Inky 源码派生模板 HTML，不复用可能按 D1 行预算截断过的阅读副本
+      const { html } = await compileInky(source);
+
+      if (disposedRef.current) {
+        return;
+      }
+
       const response = await apiFetch('/api/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: templatePayload(
           subject || t('templates.untitled'),
           subject,
-          body,
+          html,
           source,
         ),
         signal: abortRef.current.signal,

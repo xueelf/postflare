@@ -87,6 +87,9 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
   const uploadingRef = useRef(false);
   const uploadWaitersRef = useRef<Array<() => void>>([]);
   const uploadQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const manualSaveRef = useRef<Promise<void> | null>(null);
+  const manualSaveSnapshotRef = useRef<TemplateSnapshot | null>(null);
+  const manualSaveQueuedRef = useRef(false);
   const cancelUploadsRef = useRef(false);
   const knownAttachmentIdsRef = useRef<string[]>(
     extractAttachmentIds(initial.source),
@@ -207,12 +210,21 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
     isCurrent: () => boolean,
   ): Promise<'ok' | 'missing' | 'error' | 'stale'> => {
     try {
-      const res = await apiFetch('/api/templates', {
+      const res = await apiFetch(`/api/templates/${templateId}`, {
         signal: abortRef.current.signal,
       });
 
       if (disposedRef.current || !isCurrent()) {
         return 'stale';
+      }
+
+      if (res.status === 404) {
+        missingRef.current = true;
+        setMissing(true);
+        setLoadFailed(false);
+        setError(t('templates.deleted'));
+
+        return 'missing';
       }
 
       if (!res.ok) {
@@ -221,20 +233,10 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
 
         return 'error';
       }
-      const templates = (await res.json()) as TemplateRecord[];
+      const current = (await res.json()) as TemplateRecord;
 
       if (disposedRef.current || !isCurrent()) {
         return 'stale';
-      }
-      const current = templates.find(template => template.id === templateId);
-
-      if (!current) {
-        missingRef.current = true;
-        setMissing(true);
-        setLoadFailed(false);
-        setError(t('templates.deleted'));
-
-        return 'missing';
       }
       applyTemplate(current);
 
@@ -267,15 +269,20 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
         return false;
       }
 
+      const isCurrent = () =>
+        !disposedRef.current && lock.attempt === lockAttemptRef.current;
+
       if (!lock.release) {
-        setLoading(false);
         markReadOnly(true);
+        await loadTemplate(isCurrent);
+
+        if (isCurrent()) {
+          setLoading(false);
+        }
 
         return false;
       }
 
-      const isCurrent = () =>
-        !disposedRef.current && lock.attempt === lockAttemptRef.current;
       const loaded = await loadTemplate(isCurrent);
 
       if (!isCurrent() || loaded === 'stale') {
@@ -335,6 +342,7 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
     }
     nameRef.current = value;
     setNameState(value);
+    setError('');
   };
 
   const setSubject = (value: string) => {
@@ -343,12 +351,14 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
     }
     subjectRef.current = value;
     setSubjectState(value);
+    setError('');
   };
 
   const updateSource = (value: string) => {
     // 关闭期间只冻结用户输入，已接受上传的结果仍需回写最终源码。
     sourceRef.current = value;
     setSourceState(value);
+    setError('');
   };
 
   const enqueue = <T>(task: () => Promise<T>): Promise<T> => {
@@ -481,14 +491,55 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
     });
   };
 
-  const saveNow = async () => {
-    if (closingRef.current) {
-      return;
+  const saveNow = (): Promise<void> => {
+    if (manualSaveRef.current) {
+      if (
+        !manualSaveSnapshotRef.current ||
+        !sameSnapshot(manualSaveSnapshotRef.current, snapshotOf())
+      ) {
+        manualSaveQueuedRef.current = true;
+      }
+
+      return manualSaveRef.current;
     }
 
-    if (await save()) {
-      toast.success(t('templates.saved'));
-    }
+    manualSaveQueuedRef.current = true;
+
+    const run = (async () => {
+      let savedAny = false;
+
+      while (manualSaveQueuedRef.current) {
+        manualSaveQueuedRef.current = false;
+
+        if (closingRef.current) {
+          return;
+        }
+        manualSaveSnapshotRef.current = snapshotOf();
+
+        if (!(await save())) {
+          return;
+        }
+        savedAny = true;
+      }
+
+      if (savedAny) {
+        toast.success(t('templates.saved'));
+      }
+    })();
+
+    manualSaveRef.current = run;
+
+    run
+      .finally(() => {
+        if (manualSaveRef.current === run) {
+          manualSaveRef.current = null;
+          manualSaveSnapshotRef.current = null;
+          manualSaveQueuedRef.current = false;
+        }
+      })
+      .catch(() => {});
+
+    return run;
   };
 
   const saveAndClose = async (): Promise<boolean> => {
@@ -735,7 +786,7 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
           html: compiled.html,
           subject: snapshot.subject,
         },
-        extractAttachmentIds(sourceRef.current),
+        extractAttachmentIds(snapshot.source),
       );
       const uploaded = /\/api\/attachments\/([\w-]+)/.exec(url)?.[1];
 
@@ -836,8 +887,8 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
       loading ||
       readOnly ||
       missing ||
+      Boolean(error) ||
       closing ||
-      saving ||
       !name.trim() ||
       sameSnapshot(savedRef.current, snapshotOf())
     ) {
@@ -849,7 +900,17 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
     }, AUTOSAVE_DELAY);
 
     return () => clearTimeout(timer);
-  }, [loading, readOnly, closing, saving, name, subject, source, saved]);
+  }, [
+    loading,
+    readOnly,
+    missing,
+    error,
+    closing,
+    name,
+    subject,
+    source,
+    saved,
+  ]);
 
   return {
     windowId,
@@ -884,5 +945,3 @@ export function useTemplateWindow(deps: TemplateWindowDeps) {
     saveForLogout,
   };
 }
-
-export type TemplateWindowController = ReturnType<typeof useTemplateWindow>;

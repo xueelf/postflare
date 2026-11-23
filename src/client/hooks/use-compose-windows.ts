@@ -333,5 +333,3 @@ export function useComposeWindows() {
     saveAll,
   };
 }
-
-export type ComposeWindowsController = ReturnType<typeof useComposeWindows>;

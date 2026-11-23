@@ -126,13 +126,10 @@ export function ComposeFrame({
     if (!drag || drag.pointerId !== event.pointerId) {
       return;
     }
-    const width = Math.min(680, window.innerWidth - 32);
-    const maxX = Math.max(0, window.innerWidth - width);
-    const maxY = Math.max(0, window.innerHeight - 48);
 
     onMove(
-      Math.min(Math.max(0, drag.originX + event.clientX - drag.startX), maxX),
-      Math.min(Math.max(0, drag.originY + event.clientY - drag.startY), maxY),
+      drag.originX + event.clientX - drag.startX,
+      drag.originY + event.clientY - drag.startY,
     );
   };
 
@@ -155,10 +152,12 @@ export function ComposeFrame({
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (
       onSaveShortcut &&
+      !event.repeat &&
       (event.metaKey || event.ctrlKey) &&
       event.key.toLowerCase() === 's'
     ) {
       event.preventDefault();
+      event.stopPropagation();
       onSaveShortcut();
     }
   };
