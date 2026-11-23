@@ -183,6 +183,8 @@ export const de: Record<MessageKey, string> = {
   'compose.subject': 'Betreff',
   'compose.to': 'An',
   'compose.underline': 'Unterstrichen',
+  'compose.visualGuard':
+    'Diese Vorlage enthält Strukturen, die der visuelle Modus nicht vollständig erhalten kann. Bearbeite sie im Quellmodus.',
   'compose.visualMode': 'Visuell',
   'mail.actionFailedRetry': 'Aktion fehlgeschlagen, bitte erneut versuchen',
   'mail.expired': 'Diese Nachricht ist älter als {days} Tage',

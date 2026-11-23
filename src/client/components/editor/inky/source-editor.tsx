@@ -11,7 +11,7 @@ import {
 } from '@codemirror/autocomplete';
 import { indentLess, indentMore } from '@codemirror/commands';
 import { html } from '@codemirror/lang-html';
-import { Compartment, EditorState, Prec } from '@codemirror/state';
+import { Annotation, Compartment, EditorState, Prec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef } from 'react';
@@ -26,6 +26,8 @@ export interface InkySourceEditorProps {
   selection?: number | null;
   readOnly?: boolean;
 }
+
+const ExternalSourceChange = Annotation.define<boolean>();
 
 const VOID_TAGS = new Set(['image', 'video']);
 const SHORT_TAGS = new Set(['spacer']);
@@ -146,7 +148,12 @@ export function InkySourceEditor({
           ]),
           EditorView.contentAttributes.of({ 'aria-label': 'Inky' }),
           EditorView.updateListener.of(update => {
-            if (update.docChanged) {
+            if (
+              update.docChanged &&
+              !update.transactions.some(transaction =>
+                transaction.annotation(ExternalSourceChange),
+              )
+            ) {
               onChangeRef.current(update.state.doc.toString());
             }
           }),
@@ -175,6 +182,7 @@ export function InkySourceEditor({
     if (current !== value) {
       view.dispatch({
         changes: { from: 0, to: current.length, insert: value },
+        annotations: ExternalSourceChange.of(true),
       });
     }
   }, [value]);

@@ -11,24 +11,69 @@ export const inkyFrameworkCss = frameworkCss;
 
 let ready: Promise<unknown> | null = null;
 
-/**
- * Inky 2.0.0-beta.10 的 callout 把圆角和边框放在内层 th 上，外层 table 仍是
- * border-collapse: collapse，浏览器会把边框画成直角。统一改成 separate，
- * 让 callout 的圆角在所有模板中生效。
- */
-function normalizeCallout(html: string): string {
-  if (!/<table[^>]*class="[^"]*\bcallout\b/.test(html)) {
-    return html;
-  }
-  const document = new DOMParser().parseFromString(html, 'text/html');
+function findTagOutsideComments(
+  source: string,
+  pattern: RegExp,
+): { index: number; length: number } | null {
+  let index = 0;
 
-  for (const table of document.querySelectorAll<HTMLTableElement>(
-    'table.callout',
-  )) {
-    table.style.setProperty('border-collapse', 'separate');
-    table.style.setProperty('border-spacing', '0');
+  while (index < source.length) {
+    const commentStart = source.indexOf('<!--', index);
+    const slice =
+      commentStart === -1
+        ? source.slice(index)
+        : source.slice(index, commentStart);
+    const match = pattern.exec(slice);
+
+    if (match) {
+      return { index: index + match.index, length: match[0].length };
+    }
+
+    if (commentStart === -1) {
+      break;
+    }
+    const commentEnd = source.indexOf('-->', commentStart + 4);
+
+    if (commentEnd === -1) {
+      break;
+    }
+    index = commentEnd + 3;
   }
-  return document.documentElement.outerHTML;
+
+  return null;
+}
+
+/**
+ * 将框架样式注入源码。完整文档放入 head 开头，避免插在 doctype 前破坏 html 和 body 属性。
+ * 片段源码继续前置样式块。
+ */
+export function injectFrameworkCss(source: string): string {
+  const styleTag = `<style>${frameworkCss}</style>`;
+  const head = findTagOutsideComments(source, /<head(?:\s[^>]*)?>/i);
+
+  if (head) {
+    const position = head.index + head.length;
+
+    return `${source.slice(0, position)}${styleTag}${source.slice(position)}`;
+  }
+
+  const html = findTagOutsideComments(source, /<html(?:\s[^>]*)?>/i);
+
+  if (html) {
+    const position = html.index + html.length;
+
+    return `${source.slice(0, position)}<head>${styleTag}</head>${source.slice(position)}`;
+  }
+
+  const doctype = findTagOutsideComments(source, /<!doctype(?:\s[^>]*)?>/i);
+
+  if (doctype) {
+    const position = doctype.index + doctype.length;
+
+    return `${source.slice(0, position)}${styleTag}${source.slice(position)}`;
+  }
+
+  return `${styleTag}${source}`;
 }
 
 /**
@@ -40,9 +85,7 @@ function normalizeCallout(html: string): string {
 export async function compileInky(source: string): Promise<InkyCompileResult> {
   await (ready ??= init({ module_or_path: wasmUrl as unknown as string }));
 
-  const html = normalizeCallout(
-    transform_inline(`<style>${frameworkCss}</style>${source}`),
-  );
+  const html = transform_inline(injectFrameworkCss(source));
 
   return { html, text: to_plain_text(html) };
 }

@@ -174,6 +174,8 @@ export const ko: Record<MessageKey, string> = {
   'compose.subject': '제목',
   'compose.to': '받는 사람',
   'compose.underline': '밑줄',
+  'compose.visualGuard':
+    '이 템플릿에는 시각 모드에서 보존할 수 없는 구조가 있습니다. 소스 모드에서 편집하세요.',
   'compose.visualMode': '비주얼',
   'mail.actionFailedRetry': '작업에 실패했으며, 다시 시도하세요',
   'mail.expired': '이 메일은 보관 기간 {days}일을 초과했습니다',

@@ -7,7 +7,7 @@ import { INKY_TAGS, INLINE_CONTEXT_TAGS, RAW_TAGS } from './tags';
 const SOURCE_CURSOR_MARKER = '__PHYLLO_CURSOR_9F3A__';
 
 /**
- * 取 Inky 源码中的 style 块，编辑器画布需要和邮件共用同一套样式。
+ * 取 Inky 源码中的 style 块，编辑器画布复用作者样式，最终邮件由编译器生成。
  */
 export function getSourceStyles(source: string): string {
   const doc = new DOMParser().parseFromString(source, 'text/html');
@@ -198,13 +198,9 @@ function formatInkySource(html: string): string {
 }
 
 function cleanNode(node: PMNode): PMNode | null {
-  if (node.type.name === 'inkyImage') {
-    const attrs = node.attrs['attrs'] as Record<string, string> | undefined;
-
-    // 本地预览只用于画布，进入持久化源码前必须换成 R2 地址
-    if (attrs?.src?.startsWith('blob:')) {
-      return null;
-    }
+  // 只过滤编辑器自己插入、尚未完成上传的节点，作者手写的 blob URL 不在此列。
+  if (node.type.name === 'inkyImage' && node.attrs.uploading === true) {
+    return null;
   }
 
   if (

@@ -48,6 +48,12 @@ function createAttributes() {
       default: {} as InkyAttributes,
       parseHTML: (element: HTMLElement) => readAttributes(element),
     },
+    // 仅用于编辑器内部识别尚未完成上传的临时节点，不进入 Inky 源码。
+    uploading: {
+      default: false,
+      parseHTML: () => false,
+      renderHTML: () => ({}),
+    },
   };
 }
 
@@ -284,24 +290,37 @@ function createColumnView(props: NodeViewRendererProps) {
 
 function createButtonView(props: NodeViewRendererProps) {
   const document = props.view.dom.ownerDocument;
-  const wrapper = document.createElement('div');
+  const table = document.createElement('table');
+  const body = document.createElement('tbody');
+  const row = document.createElement('tr');
+  const cell = document.createElement('td');
+  const innerTable = document.createElement('table');
+  const innerBody = document.createElement('tbody');
+  const innerRow = document.createElement('tr');
+  const innerCell = document.createElement('td');
   const link = document.createElement('a');
 
-  wrapper.className = 'inky-button-block';
-  wrapper.appendChild(link);
+  // 与 Inky 编译后的按钮结构一致，作者按 table.button 编写的 CSS 才能命中。
+  table.setAttribute('role', 'presentation');
+  innerTable.setAttribute('role', 'presentation');
+  table.appendChild(body);
+  body.appendChild(row);
+  row.appendChild(cell);
+  cell.appendChild(innerTable);
+  innerTable.appendChild(innerBody);
+  innerBody.appendChild(innerRow);
+  innerRow.appendChild(innerCell);
+  innerCell.appendChild(link);
   link.addEventListener('click', event => event.preventDefault());
 
   const apply = () => {
     const attributes = nodeAttributes(props);
 
-    link.className = classNames(
-      'inky-button-view',
+    table.className = classNames(
+      'button',
+      attributes.class,
       attributes.size,
       attributes.color,
-      // 兼容旧源码里的裸 hollow/rounded；新按钮由组件对话框写成 class。
-      attributes.hollow === '' && 'hollow',
-      attributes.rounded === '' && 'rounded',
-      attributes.class,
     );
 
     if (attributes.href) {
@@ -327,7 +346,7 @@ function createButtonView(props: NodeViewRendererProps) {
   apply();
 
   return {
-    dom: wrapper,
+    dom: table,
     contentDOM: link,
     update: (updated: DocNode) => {
       props = { ...props, node: updated };
@@ -610,7 +629,7 @@ function createPreviewView(props: NodeViewRendererProps) {
 
   wrapper.className = 'inky-preview';
   label.className = 'inky-preview-label';
-  label.textContent = 'Preview';
+  label.setAttribute('contenteditable', 'false');
   content.className = 'inky-preview-content';
   wrapper.appendChild(label);
   wrapper.appendChild(content);
@@ -680,6 +699,9 @@ function createMediaView(
   const apply = () => {
     const attributes = nodeAttributes(props);
     const width = mediaDisplayWidth(attributes, kind);
+
+    // 作者 class 属于实际邮件元素，必须落到 img/video 本身而不是 resize 外壳。
+    media.className = attributes.class ?? '';
 
     if (attributes.src) {
       media.setAttribute('src', attributes.src);
@@ -1408,59 +1430,6 @@ function removeTransientParagraph(
   editor.view.dispatch(transaction.scrollIntoView());
 
   return true;
-}
-
-export function removeTransientParagraphs(editor: Editor): void {
-  const { state, view } = editor;
-  const ranges: ParagraphRange[] = [];
-
-  state.doc.descendants((node, pos) => {
-    if (
-      node.type.name === 'paragraph' &&
-      node.attrs.transient &&
-      node.content.size === 0
-    ) {
-      ranges.push({ node, pos });
-
-      return false;
-    }
-    return true;
-  });
-
-  if (ranges.length === 0) {
-    return;
-  }
-  const transaction = state.tr;
-  const onlyTransient = state.doc.childCount === ranges.length;
-
-  for (const range of ranges.sort((left, right) => right.pos - left.pos)) {
-    transaction.delete(range.pos, range.pos + range.node.nodeSize);
-  }
-
-  if (onlyTransient) {
-    const first = transaction.doc.firstChild;
-
-    if (
-      first?.type.name === 'paragraph' &&
-      first.content.size === 0 &&
-      !first.attrs.transient
-    ) {
-      transaction.setNodeMarkup(0, undefined, {
-        ...first.attrs,
-        transient: true,
-      });
-    }
-  }
-
-  const mapped = Math.min(
-    transaction.mapping.map(state.selection.from),
-    transaction.doc.content.size,
-  );
-
-  transaction.setSelection(
-    TextSelection.near(transaction.doc.resolve(mapped), 1),
-  );
-  view.dispatch(transaction);
 }
 
 export const InkyTransientCleanup = Extension.create({

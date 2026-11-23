@@ -168,6 +168,8 @@ export const zh = {
   'compose.subject': '主题',
   'compose.to': '收件人',
   'compose.underline': '下划线',
+  'compose.visualGuard':
+    '此模板含有可视化模式无法保留的结构，请使用源码模式编辑。',
   'compose.visualMode': '可视化',
   'mail.actionFailedRetry': '操作失败，请重试',
   'mail.expired': '邮件已超过 {days} 天保留期',

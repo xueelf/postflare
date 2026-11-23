@@ -179,6 +179,8 @@ export const ja: Record<MessageKey, string> = {
   'compose.subject': '件名',
   'compose.to': '宛先',
   'compose.underline': '下線',
+  'compose.visualGuard':
+    'このテンプレートにはビジュアルモードで保持できない構造が含まれています。ソースモードで編集してください。',
   'compose.visualMode': 'ビジュアル',
   'mail.actionFailedRetry': '操作に失敗しましたので、再試行してください',
   'mail.expired': 'このメールは保存期間の {days} 日を超えています',

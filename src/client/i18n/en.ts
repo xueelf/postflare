@@ -173,6 +173,8 @@ export const en: Record<MessageKey, string> = {
   'compose.subject': 'Subject',
   'compose.to': 'To',
   'compose.underline': 'Underline',
+  'compose.visualGuard':
+    'This template contains structures that visual mode cannot preserve. Edit it in source mode.',
   'compose.visualMode': 'Visual',
   'mail.actionFailedRetry': 'Action failed, please try again',
   'mail.expired': 'This message is older than {days} days',

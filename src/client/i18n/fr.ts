@@ -179,6 +179,8 @@ export const fr: Record<MessageKey, string> = {
   'compose.subject': 'Objet',
   'compose.to': 'À',
   'compose.underline': 'Souligné',
+  'compose.visualGuard':
+    'Ce modèle contient des structures que le mode visuel ne peut pas préserver. Modifiez-le en mode source.',
   'compose.visualMode': 'Visuel',
   'mail.actionFailedRetry': "Échec de l'action, réessayez",
   'mail.expired': 'Ce message date de plus de {days} jours',

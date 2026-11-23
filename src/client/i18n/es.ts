@@ -181,6 +181,8 @@ export const es: Record<MessageKey, string> = {
   'compose.subject': 'Asunto',
   'compose.to': 'Para',
   'compose.underline': 'Subrayado',
+  'compose.visualGuard':
+    'Esta plantilla contiene estructuras que el modo visual no puede conservar. Edítala en el modo de código.',
   'compose.visualMode': 'Visual',
   'mail.actionFailedRetry':
     'No se pudo completar la acción, inténtalo de nuevo',

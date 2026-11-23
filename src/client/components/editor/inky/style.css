@@ -142,6 +142,43 @@
   font-size: 12px;
 }
 
+.inky-guard {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.inky-guard-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.inky-guard-action {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.inky-guard-action:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.inky-guard-action:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
 .inky-uploading {
   padding: 4px 12px;
   border-bottom: 1px solid var(--line);

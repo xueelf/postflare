@@ -38,13 +38,13 @@ import {
   INKY_COMPONENT_ORDER,
   INKY_COMPONENTS,
 } from './components';
+import { inspectInkySource } from './guard';
 import { LinkDialog } from './link-dialog';
 import {
   handleInkyKeyDown,
   InkyExtensions,
   InkyParagraph,
   isInsideTextComponent,
-  removeTransientParagraphs,
 } from './schema';
 import {
   getInkySource,
@@ -220,10 +220,13 @@ function markSoleEmptyParagraphTransient(editor: Editor): void {
     !first.attrs.transient
   ) {
     editor.view.dispatch(
-      editor.state.tr.setNodeMarkup(0, undefined, {
-        ...first.attrs,
-        transient: true,
-      }),
+      editor.state.tr
+        .setNodeMarkup(0, undefined, {
+          ...first.attrs,
+          transient: true,
+        })
+        .setMeta('preventUpdate', true)
+        .setMeta('addToHistory', false),
     );
   }
 }
@@ -311,55 +314,7 @@ const FRAME_STYLE = `
     font-size: 11px;
   }
   .tiptap table.callout {
-    border-collapse: separate;
-    border-spacing: 0;
     width: 100%;
-  }
-  .tiptap .inky-button-block {
-    margin-block: 0 16px;
-  }
-  .tiptap .inky-button-view {
-    display: inline-block;
-    padding: 8px 16px;
-    border-radius: 3px;
-    background: #1a73b5;
-    color: #fff;
-    font-weight: bold;
-    line-height: 1.4;
-    text-decoration: none;
-    white-space: pre-wrap;
-  }
-  .tiptap .inky-button-view.small {
-    padding: 5px 10px;
-    font-size: 12px;
-  }
-  .tiptap .inky-button-view.large {
-    padding: 10px 20px;
-    font-size: 20px;
-  }
-  .tiptap .inky-button-view.tiny {
-    padding: 4px 8px;
-    font-size: 10px;
-  }
-  .tiptap .inky-button-view.secondary {
-    background: #777;
-  }
-  .tiptap .inky-button-view.success {
-    background: #3adb76;
-  }
-  .tiptap .inky-button-view.alert {
-    background: #ec5840;
-  }
-  .tiptap .inky-button-view.warning {
-    background: #ffae00;
-  }
-  .tiptap .inky-button-view.hollow {
-    border: 1px solid currentColor;
-    background: transparent;
-    color: #1a73b5;
-  }
-  .tiptap .inky-button-view.rounded {
-    border-radius: 500px;
   }
   .tiptap table.callout,
   .tiptap table.alert,
@@ -421,6 +376,9 @@ const FRAME_STYLE = `
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
+  .tiptap .inky-preview-label::before {
+    content: var(--inky-preview-label, 'Preview');
+  }
   .tiptap .inky-preview-content {
     color: #52617a;
   }
@@ -479,6 +437,10 @@ export function InkyEditor({
     null,
   );
   const [uploadingCount, setUploadingCount] = useState(0);
+  const [sourceDraft, setSourceDraft] = useState(source);
+  const [guard, setGuard] = useState(() => inspectInkySource(source));
+  const guardRef = useRef(guard);
+  const lastAppliedSourceRef = useRef(source);
   const componentReturnRef = useRef(false);
   const focusVisualRef = useRef(false);
   const linkReturnRef = useRef(false);
@@ -486,10 +448,11 @@ export function InkyEditor({
   const sourceSnapshotRef = useRef('');
   const visualSelectionRef = useRef<VisualSelection | null>(null);
 
+  guardRef.current = guard;
   onChangeRef.current = onChange;
   uploadImageRef.current = onUploadImage;
   onUploadingChangeRef.current = onUploadingChange;
-  disabledRef.current = disabled;
+  disabledRef.current = disabled || guard.blocked;
 
   useEffect(() => {
     onUploadingChangeRef.current?.(uploadingCount > 0);
@@ -587,17 +550,23 @@ export function InkyEditor({
       Placeholder.configure({ placeholder: t('compose.body') }),
     ],
     content: protectComments(source),
-    editable: !disabled,
+    editable: !disabled && !guard.blocked,
     onUpdate: ({ editor: instance }) => {
-      onChangeRef.current(getInkySource(instance));
+      if (guardRef.current.blocked) {
+        return;
+      }
+      const next = getInkySource(instance);
+
+      lastAppliedSourceRef.current = next;
+      onChangeRef.current(next);
     },
   });
 
   editorRef.current = editor;
 
   useEffect(() => {
-    editor.setEditable(!disabled);
-  }, [disabled, editor]);
+    editor.setEditable(!disabled && !guard.blocked, false);
+  }, [disabled, guard.blocked, editor]);
 
   // Backspace/Delete 会被 ProseMirror 的基础 keymap 优先处理，这里在捕获阶段截住组件边界。
   useEffect(() => {
@@ -623,7 +592,7 @@ export function InkyEditor({
     return () => canvasRoot.removeEventListener('keydown', onKeyDown, true);
   }, [canvasRoot, editor]);
 
-  // 用 Shadow DOM 隔离邮件样式，编辑画布和邮件使用同一套表格与 CSS
+  // 画布复用部分邮件样式，并用可编辑 NodeView 呈现组件。最终邮件 HTML 由编译器生成。
   useEffect(() => {
     const host = canvasRef.current;
 
@@ -642,6 +611,7 @@ export function InkyEditor({
       shadow.appendChild(style);
     }
     style.textContent = [
+      `:host { --inky-preview-label: ${JSON.stringify(t('compose.componentPreview'))}; }`,
       inkyFrameworkCss,
       getSourceStyles(source),
       FRAME_STYLE,
@@ -655,18 +625,32 @@ export function InkyEditor({
       shadow.appendChild(mount);
     }
     setCanvasRoot(mount);
-  }, [source]);
+  }, [locale, source]);
 
-  // 外部内容变化（载入草稿或切回可视化）时同步进编辑器
+  // 外部内容变化（载入草稿或切回可视化）时同步进编辑器。
+  // 只认最近一次外部应用的源码，避免可视化序列化结果反向触发重复解析。
   useEffect(() => {
     if (editor.isDestroyed || sourceMode) {
       return;
     }
-    const current = getInkySource(editor);
 
-    if (source !== current) {
-      editor.commands.setContent(protectComments(source));
+    if (source === lastAppliedSourceRef.current) {
+      if (!source.trim()) {
+        markSoleEmptyParagraphTransient(editor);
+      }
+
+      return;
     }
+    const nextGuard = inspectInkySource(source);
+
+    guardRef.current = nextGuard;
+    setGuard(nextGuard);
+    setSourceDraft(source);
+    lastAppliedSourceRef.current = source;
+
+    editor.commands.setContent(protectComments(source), {
+      emitUpdate: false,
+    });
 
     if (!source.trim()) {
       markSoleEmptyParagraphTransient(editor);
@@ -775,43 +759,48 @@ export function InkyEditor({
     }
 
     if (sourceMode) {
-      const restore = source === sourceSnapshotRef.current;
+      const restore = sourceDraft === sourceSnapshotRef.current;
 
       focusVisualRef.current = true;
-      editor.commands.setContent(protectComments(source));
-
-      if (!source.trim()) {
-        markSoleEmptyParagraphTransient(editor);
-      }
 
       if (restore) {
+        setSourceMode(false);
         restoreSelection(editor, visualSelectionRef.current);
+
+        return;
+      }
+
+      const nextGuard = inspectInkySource(sourceDraft);
+
+      guardRef.current = nextGuard;
+      setGuard(nextGuard);
+      lastAppliedSourceRef.current = sourceDraft;
+
+      editor.commands.setContent(protectComments(sourceDraft), {
+        emitUpdate: false,
+      });
+
+      if (!sourceDraft.trim()) {
+        markSoleEmptyParagraphTransient(editor);
       }
       setSourceMode(false);
 
-      const normalized = getInkySource(editor);
-
-      if (normalized !== source) {
-        onChangeRef.current(normalized);
-      }
       return;
     }
 
-    removeTransientParagraphs(editor);
+    const current = guard.blocked ? sourceDraft : getInkySource(editor);
 
-    const current = getInkySource(editor);
-
-    sourceSelectionRef.current = getInkySourceSelection(editor);
+    sourceSelectionRef.current = guard.blocked
+      ? null
+      : getInkySourceSelection(editor);
     sourceSnapshotRef.current = current;
     visualSelectionRef.current = captureSelection(editor.state.selection);
-
-    if (current !== source) {
-      onChangeRef.current(current);
-    }
+    setSourceDraft(current);
     setSourceMode(true);
   };
 
   const changeSource = (value: string) => {
+    setSourceDraft(value);
     onChangeRef.current(value);
   };
 
@@ -831,10 +820,13 @@ export function InkyEditor({
       }
 
       view.dispatch(
-        state.tr.setNodeMarkup(pos, undefined, {
-          ...node.attrs,
-          attrs: { ...attrs, src: remoteUrl },
-        }),
+        state.tr
+          .setNodeMarkup(pos, undefined, {
+            ...node.attrs,
+            attrs: { ...attrs, src: remoteUrl },
+            uploading: false,
+          })
+          .setMeta('addToHistory', false),
       );
       updated = true;
 
@@ -850,7 +842,8 @@ export function InkyEditor({
     }
     const { state } = editor;
 
-    let target: { from: number; to: number } | null = null;
+    let targetFrom = -1;
+    let targetTo = -1;
 
     state.doc.descendants((node, pos) => {
       const attrs = node.attrs['attrs'] as Record<string, string> | undefined;
@@ -858,13 +851,18 @@ export function InkyEditor({
       if (node.type.name !== 'inkyImage' || attrs?.src !== src) {
         return true;
       }
-      target = { from: pos, to: pos + node.nodeSize };
+      targetFrom = pos;
+      targetTo = pos + node.nodeSize;
 
       return false;
     });
 
-    if (target) {
-      editor.chain().focus().deleteRange(target).run();
+    if (targetFrom >= 0) {
+      editor.view.dispatch(
+        editor.state.tr
+          .deleteRange(targetFrom, targetTo)
+          .setMeta('addToHistory', false),
+      );
     }
   };
 
@@ -897,7 +895,7 @@ export function InkyEditor({
     const localUrl = URL.createObjectURL(file);
     const inserted = insertBlockNode(editor, {
       type: 'inkyImage',
-      attrs: { attrs: { src: localUrl, alt: file.name } },
+      attrs: { attrs: { src: localUrl, alt: file.name }, uploading: true },
     });
 
     if (inserted) {
@@ -925,7 +923,7 @@ export function InkyEditor({
       }
       node = {
         type: 'inkyImage',
-        attrs: { attrs },
+        attrs: { attrs, uploading: Boolean(result.file) },
       };
     } else if (result.type === 'video') {
       node = {
@@ -933,9 +931,7 @@ export function InkyEditor({
         attrs: { attrs: result.attrs },
       };
     } else if (result.type === 'menu') {
-      const items = result.items?.length
-        ? result.items
-        : [{ text: '', href: '' }];
+      const items = result.items ?? [];
 
       node = {
         type: 'inkyMenu',
@@ -1021,6 +1017,19 @@ export function InkyEditor({
 
   return (
     <div className="compose-editor">
+      {!sourceMode && guard.blocked ? (
+        <div className="inky-guard" role="status" aria-live="polite">
+          <span className="inky-guard-message">{t('compose.visualGuard')}</span>
+          <button
+            type="button"
+            className="inky-guard-action"
+            disabled={disabled}
+            onClick={toggleSource}
+          >
+            {t('compose.sourceMode')}
+          </button>
+        </div>
+      ) : null}
       {uploadingCount > 0 ? (
         <div className="inky-uploading" role="status" aria-live="polite">
           {t('common.loading')}
@@ -1033,7 +1042,7 @@ export function InkyEditor({
       </div>
       {sourceMode ? (
         <InkySourceEditor
-          value={source}
+          value={sourceDraft}
           onChange={changeSource}
           selection={sourceSelectionRef.current}
           readOnly={disabled}
@@ -1041,7 +1050,10 @@ export function InkyEditor({
       ) : null}
       {toolbarTarget
         ? createPortal(
-            <div className="compose-toolbar" inert={disabled || undefined}>
+            <div
+              className="compose-toolbar"
+              inert={disabled || guard.blocked || undefined}
+            >
               {sourceMode ? null : (
                 <>
                   <Popover
