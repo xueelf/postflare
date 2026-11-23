@@ -16,6 +16,22 @@ export type MimeAttachment =
       content: ArrayBuffer;
     };
 
+export type MimeAttachmentSize =
+  | {
+      disposition: 'inline';
+      contentId: string;
+      filename: string;
+      type: string;
+      sizeBytes: number;
+    }
+  | {
+      disposition: 'attachment';
+      contentId?: undefined;
+      filename: string;
+      type: string;
+      sizeBytes: number;
+    };
+
 export interface RawMessage {
   from: string;
   fromName?: string;
@@ -27,8 +43,32 @@ export interface RawMessage {
   messageId?: string;
 }
 
+export interface RawMessageSizeInput {
+  from: string;
+  fromName?: string;
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  attachments: MimeAttachmentSize[];
+  messageId?: string;
+}
+
 function wrapBase64(value: string): string {
   return value.replace(/.{76}(?=.)/g, '$&\r\n');
+}
+
+/**
+ * 计算二进制内容按 76 字符折行后的 Base64 字节数，与 bytesToBase64 输出长度完全一致。
+ */
+export function wrappedBase64Bytes(byteLength: number): number {
+  if (byteLength <= 0) {
+    return 0;
+  }
+  const base64Length = Math.ceil(byteLength / 3) * 4;
+  const lines = Math.ceil(base64Length / 76);
+
+  return base64Length + (lines - 1) * 2;
 }
 
 function bytesToBase64(buffer: ArrayBuffer): string {
@@ -202,4 +242,61 @@ export function buildRawMessage(message: RawMessage): string {
   }
 
   return foldHeaders(mime.asRaw());
+}
+
+/**
+ * 按 D1 已存的附件字节数计算最终 MIME 大小，不重读 R2 历史附件对象。
+ */
+export function estimateRawMessageBytes(message: RawMessageSizeInput): number {
+  const placeholder = 'QQ==';
+  const mime = createMimeMessage();
+
+  mime.setSender(
+    message.fromName
+      ? { name: message.fromName, addr: message.from }
+      : message.from,
+  );
+
+  mime.setTo(
+    message.to
+      .split(',')
+      .map(recipient => recipient.trim())
+      .filter(Boolean),
+  );
+  mime.setSubject(message.subject);
+
+  if (message.messageId) {
+    mime.setHeader('Message-ID', message.messageId);
+  }
+
+  mime.addMessage({
+    contentType: 'text/plain',
+    data: encodeBody(message.text),
+    encoding: 'base64',
+  });
+
+  mime.addMessage({
+    contentType: 'text/html',
+    data: encodeBody(message.html),
+    encoding: 'base64',
+  });
+
+  let extraBytes = 0;
+
+  for (const attachment of message.attachments) {
+    mime.addAttachment({
+      filename: attachment.filename,
+      contentType: attachment.type,
+      data: placeholder,
+      inline: attachment.disposition === 'inline',
+      headers: attachment.contentId
+        ? { 'Content-ID': attachment.contentId }
+        : {},
+    });
+    extraBytes += wrappedBase64Bytes(attachment.sizeBytes) - placeholder.length;
+  }
+
+  return (
+    new TextEncoder().encode(foldHeaders(mime.asRaw())).length + extraBytes
+  );
 }

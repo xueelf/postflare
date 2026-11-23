@@ -12,7 +12,12 @@ import { copyAttachments } from './attachments';
 import type { AuthUser } from './auth';
 import { chunks, DB_PARAM_LIMIT, deleteObjects } from './batch';
 import { badRequest, jsonError, notFound, readJson } from './http';
-import { capBody, normalizeMessageId, sqlDate } from './mail-store';
+import {
+  capBody,
+  htmlToPlainText,
+  normalizeMessageId,
+  sqlDate,
+} from './mail-store';
 import { messageDetail, purgeMessages } from './messages';
 import { type MimeAttachment, buildRawMessage } from './mime';
 import { rowTooLarge, sqliteRowBytes } from './row-size';
@@ -83,12 +88,11 @@ export async function composeMessage(
       `SELECT a.filename, a.content_type, a.storage_key
        FROM attachments a
        WHERE a.id = ?
-         AND (
-           EXISTS (SELECT 1 FROM messages m WHERE m.id = a.message_id AND m.user_id = ?)
-           OR EXISTS (SELECT 1 FROM templates t WHERE t.id = a.template_id AND t.user_id = ?)
+         AND EXISTS (
+           SELECT 1 FROM messages m WHERE m.id = a.message_id AND m.user_id = ?
          )`,
     )
-      .bind(attachmentId, user.id, user.id)
+      .bind(attachmentId, user.id)
       .first<{ filename: string; content_type: string; storage_key: string }>();
 
     if (!attachment) {
@@ -113,8 +117,8 @@ export async function composeMessage(
   }
 
   // 没装载成功的图片不做 cid 替换，否则收件人看到的是裂图
-  const sendHtml = replaceAttachmentUrls(html, id =>
-    sentIds.has(id) ? `cid:${id}` : null,
+  const sendHtml = replaceAttachmentUrls(html, attachmentId =>
+    sentIds.has(attachmentId) ? `cid:${attachmentId}` : null,
   );
 
   const previewRaw = buildRawMessage({
@@ -131,22 +135,55 @@ export async function composeMessage(
     return jsonError('message too large', 413);
   }
 
-  const sender = { name: user.name, email: user.email };
-  const result = await env.EMAIL.send({
-    from: sender,
-    to: parseRecipients(to),
-    subject,
-    text,
-    html: sendHtml,
-    attachments,
-  });
-
-  const messageId = normalizeMessageId(result.messageId);
   const draftId =
-    typeof payload.draftId === 'string' && payload.draftId
-      ? payload.draftId
+    typeof payload.draftId === 'string' && payload.draftId.trim()
+      ? payload.draftId.trim()
       : null;
 
+  // 调用发信绑定前原子认领草稿，阻断同一草稿的并发或重放投递
+  if (draftId) {
+    const claimed = await env.DB.prepare(
+      `UPDATE messages
+       SET raw_storage_key = ?
+       WHERE id = ? AND user_id = ? AND mailbox = 'drafts' AND raw_storage_key IS NULL`,
+    )
+      .bind(rawKey, draftId, user.id)
+      .run();
+
+    if (claimed.meta.changes === 0) {
+      return notFound();
+    }
+  }
+
+  const sender = { name: user.name, email: user.email };
+
+  let result: { messageId?: string };
+
+  try {
+    result = await env.EMAIL.send({
+      from: sender,
+      to: parseRecipients(to),
+      subject,
+      text,
+      html: sendHtml,
+      attachments,
+    });
+  } catch (error) {
+    if (draftId) {
+      await env.DB.prepare(
+        `UPDATE messages
+         SET raw_storage_key = NULL
+         WHERE id = ? AND user_id = ? AND mailbox = 'drafts' AND raw_storage_key = ?`,
+      )
+        .bind(draftId, user.id, rawKey)
+        .run()
+        .catch(() => {});
+    }
+
+    throw error;
+  }
+
+  const messageId = normalizeMessageId(result.messageId);
   const inlineSet = new Set(draftAttachmentIds);
 
   let staleDraftKeys: string[] = [];
@@ -333,7 +370,7 @@ async function pruneDraftImages(
     return;
   }
 
-  // 先删 R2 对象，再删数据库行；失败时保留元数据，下一次保存可重试
+  // 先删 R2 对象，再删数据库行，失败时保留元数据，下一次保存可重试
   await deleteObjects(
     env,
     stale.map(row => row.storage_key),
@@ -360,7 +397,7 @@ interface TemplateDraftRow {
 }
 
 /**
- * 用模板创建草稿。附件复制到草稿自身，模板后续删除不影响已创建的邮件。
+ * 用模板创建草稿。先复制 R2 附件并派生最终正文，再在一次 D1 batch 中原子发布草稿与附件行。
  */
 async function createDraftFromTemplate(
   env: Env,
@@ -380,6 +417,19 @@ async function createDraftFromTemplate(
   }
 
   const id = crypto.randomUUID();
+  const copied = await copyAttachments(
+    env,
+    user.id,
+    { messageId: id },
+    template.body_html,
+    template.body_source,
+  );
+
+  if (copied instanceof Response) {
+    return copied;
+  }
+
+  const bodyText = htmlToPlainText(copied.bodyHtml);
 
   if (
     rowTooLarge([
@@ -392,9 +442,9 @@ async function createDraftFromTemplate(
       '',
       '',
       template.subject,
-      '',
-      template.body_html,
-      template.body_source,
+      bodyText,
+      copied.bodyHtml,
+      copied.bodySource,
       '',
       '',
       '',
@@ -403,53 +453,34 @@ async function createDraftFromTemplate(
       '0000-00-00 00:00:00',
     ])
   ) {
+    await deleteObjects(env, copied.writtenKeys).catch(cleanupError => {
+      console.error('failed to delete oversized draft objects', cleanupError);
+    });
+
     return badRequest('message too large');
   }
 
-  await env.DB.prepare(
+  const insertDraft = env.DB.prepare(
     `INSERT INTO messages (
        id, user_id, mailbox, direction, from_address, to_address, subject,
        body_text, body_html, body_source
-     ) VALUES (?, ?, 'drafts', 'outbound', ?, '', ?, '', ?, ?)`,
-  )
-    .bind(
-      id,
-      user.id,
-      user.email,
-      template.subject,
-      template.body_html,
-      template.body_source,
-    )
-    .run();
+     ) VALUES (?, ?, 'drafts', 'outbound', ?, '', ?, ?, ?, ?)`,
+  ).bind(
+    id,
+    user.id,
+    user.email,
+    template.subject,
+    bodyText,
+    copied.bodyHtml,
+    copied.bodySource,
+  );
 
   try {
-    const copied = await copyAttachments(
-      env,
-      user.id,
-      { messageId: id },
-      template.body_html,
-      template.body_source,
-    );
-
-    if (copied instanceof Response) {
-      await purgeMessages(env, [id]).catch(() => {});
-
-      return copied;
-    }
-
-    if (
-      copied.bodyHtml !== template.body_html ||
-      copied.bodySource !== template.body_source
-    ) {
-      await env.DB.prepare(
-        `UPDATE messages SET body_html = ?, body_source = ?
-         WHERE id = ? AND user_id = ?`,
-      )
-        .bind(copied.bodyHtml, copied.bodySource, id, user.id)
-        .run();
-    }
+    await env.DB.batch([insertDraft, ...copied.statements]);
   } catch (error) {
-    await purgeMessages(env, [id]).catch(() => {});
+    await deleteObjects(env, copied.writtenKeys).catch(cleanupError => {
+      console.error('failed to delete partial draft objects', cleanupError);
+    });
 
     throw error;
   }
@@ -559,7 +590,7 @@ export async function saveDraft(
       `UPDATE messages
        SET to_address = ?, subject = ?, body_text = ?, body_html = ?,
            body_source = ?, updated_at = datetime('now')
-       WHERE id = ? AND user_id = ? AND mailbox = 'drafts'`,
+       WHERE id = ? AND user_id = ? AND mailbox = 'drafts' AND raw_storage_key IS NULL`,
     )
       .bind(to, subject, text, html, source, id, user.id)
       .run();
@@ -603,7 +634,8 @@ export async function discardDraft(
   userId: string,
 ): Promise<Response> {
   const draft = await env.DB.prepare(
-    `SELECT id FROM messages WHERE id = ? AND mailbox = 'drafts' AND user_id = ?`,
+    `SELECT id FROM messages
+     WHERE id = ? AND mailbox = 'drafts' AND user_id = ? AND raw_storage_key IS NULL`,
   )
     .bind(id, userId)
     .first<{ id: string }>();

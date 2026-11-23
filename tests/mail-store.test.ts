@@ -1,6 +1,10 @@
 import { expect, test } from 'bun:test';
 
-import { capBody, normalizeMessageId } from '#/worker/mail-store';
+import {
+  capBody,
+  htmlToPlainText,
+  normalizeMessageId,
+} from '#/worker/mail-store';
 
 test('normalizeMessageId 去掉包裹的尖括号', () => {
   expect(normalizeMessageId('<abc@example.com>')).toBe('abc@example.com');
@@ -8,11 +12,22 @@ test('normalizeMessageId 去掉包裹的尖括号', () => {
   expect(normalizeMessageId(' <abc@example.com> ')).toBe('abc@example.com');
 });
 
-test('normalizeMessageId 对空值返回 null', () => {
+test('normalizeMessageId 对空值和空尖括号返回 null', () => {
   expect(normalizeMessageId(null)).toBeNull();
   expect(normalizeMessageId(undefined)).toBeNull();
   expect(normalizeMessageId('')).toBeNull();
   expect(normalizeMessageId('   ')).toBeNull();
+  expect(normalizeMessageId('<>')).toBeNull();
+  expect(normalizeMessageId(' <   > ')).toBeNull();
+});
+
+test('htmlToPlainText 提取正文并跳过 style、head 与注释', () => {
+  const html = [
+    '<html><head><title>隐藏标题</title><style>.a { color: red; }</style></head>',
+    '<body><!-- 隐藏注释 --><p>你好，&nbsp;<strong>API Key</strong> 已创建 &amp; 生效 &#x2728;</p></body></html>',
+  ].join('');
+
+  expect(htmlToPlainText(html)).toBe('你好， API Key 已创建 & 生效 ✨');
 });
 
 test('capBody 在字节上限内原样返回', () => {

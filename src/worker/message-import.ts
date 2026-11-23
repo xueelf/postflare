@@ -34,6 +34,15 @@ export async function importMessages(
   if (files.length === 0) {
     return badRequest('no eml files');
   }
+
+  const targetEntry = form.get('mailbox');
+  const targetMailbox =
+    typeof targetEntry === 'string' ? targetEntry.trim() : '';
+
+  if (targetMailbox && targetMailbox !== 'inbox' && targetMailbox !== 'sent') {
+    return badRequest('invalid mailbox');
+  }
+
   const result: ImportResult = {
     imported: 0,
     skipped: 0,
@@ -71,7 +80,9 @@ export async function importMessages(
 
     try {
       const from = parsed.from?.address ?? '';
-      const sent = from.toLowerCase() === user.email.toLowerCase();
+      const sent = targetMailbox
+        ? targetMailbox === 'sent'
+        : from.toLowerCase() === user.email.toLowerCase();
       const direction = sent ? 'outbound' : 'inbound';
       const mailbox = sent ? 'sent' : 'inbox';
       const to =

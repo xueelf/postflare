@@ -5,8 +5,9 @@ import {
 } from '#/attachment-url';
 import { EMAIL_MAX_BYTES, MAX_ATTACHMENTS } from '#/limits';
 
+import { deleteObjects } from './batch';
 import { badRequest, jsonError, notFound } from './http';
-import { type MimeAttachment, buildRawMessage } from './mime';
+import { type MimeAttachmentSize, estimateRawMessageBytes } from './mime';
 
 export interface AttachmentRow {
   id: string;
@@ -79,9 +80,16 @@ export function replaceCidImages(
 
 export type AttachmentTarget = { messageId: string } | { templateId: string };
 
+export interface PreparedAttachmentCopies {
+  bodyHtml: string;
+  bodySource: string;
+  writtenKeys: string[];
+  statements: D1PreparedStatement[];
+}
+
 /**
- * 把正文引用的附件复制到目标邮件或模板，返回重写后的正文。
- * 目标必须已经存在，附件归属校验与发送时一致。
+ * 准备目标邮件或模板的附件副本：先把对象复制到 R2，再返回待同批提交的 D1 插入语句与重写后的正文。
+ * 调用方在一次 D1 batch 中同时插入父记录与附件记录，保证目标在复制完成前不可见。
  */
 export async function copyAttachments(
   env: Env,
@@ -89,73 +97,89 @@ export async function copyAttachments(
   target: AttachmentTarget,
   bodyHtml: string,
   bodySource: string,
-): Promise<{ bodyHtml: string; bodySource: string } | Response> {
+): Promise<PreparedAttachmentCopies | Response> {
   const ids = new Set([
     ...extractAttachmentIds(bodyHtml),
     ...extractAttachmentIds(bodySource),
   ]);
 
   if (ids.size === 0) {
-    return { bodyHtml, bodySource };
+    return {
+      bodyHtml,
+      bodySource,
+      writtenKeys: [],
+      statements: [],
+    };
   }
 
   const messageTarget = 'messageId' in target;
   const targetColumn = messageTarget ? 'message_id' : 'template_id';
   const targetId = messageTarget ? target.messageId : target.templateId;
   const replacements = new Map<string, string>();
+  const writtenKeys: string[] = [];
+  const statements: D1PreparedStatement[] = [];
 
-  for (const id of ids) {
-    const attachment = await env.DB.prepare(
-      `SELECT a.filename, a.content_type, a.storage_key
-       FROM attachments a
-       WHERE a.id = ?
-         AND (
-           EXISTS (SELECT 1 FROM messages m WHERE m.id = a.message_id AND m.user_id = ?)
-           OR EXISTS (SELECT 1 FROM templates t WHERE t.id = a.template_id AND t.user_id = ?)
-         )`,
-    )
-      .bind(id, userId, userId)
-      .first<{ filename: string; content_type: string; storage_key: string }>();
-
-    if (!attachment) {
-      return badRequest('attachment not found');
-    }
-
-    const object = await env.ATTACHMENTS.get(attachment.storage_key);
-
-    if (!object) {
-      return badRequest('attachment not found');
-    }
-
-    const newId = crypto.randomUUID();
-    const storageKey = `attachments/${targetId}/${newId}`;
-
-    await env.ATTACHMENTS.put(storageKey, object.body, {
-      httpMetadata: { contentType: attachment.content_type },
-    });
-
-    try {
-      await env.DB.prepare(
-        `INSERT INTO attachments
-           (id, ${targetColumn}, filename, content_type, size_bytes, storage_key)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+  try {
+    for (const id of ids) {
+      const attachment = await env.DB.prepare(
+        `SELECT a.filename, a.content_type, a.storage_key
+         FROM attachments a
+         WHERE a.id = ?
+           AND (
+             EXISTS (SELECT 1 FROM messages m WHERE m.id = a.message_id AND m.user_id = ?)
+             OR EXISTS (SELECT 1 FROM templates t WHERE t.id = a.template_id AND t.user_id = ?)
+           )`,
       )
-        .bind(
+        .bind(id, userId, userId)
+        .first<{
+          filename: string;
+          content_type: string;
+          storage_key: string;
+        }>();
+
+      if (!attachment) {
+        await deleteObjects(env, writtenKeys).catch(() => {});
+
+        return badRequest('attachment not found');
+      }
+
+      const object = await env.ATTACHMENTS.get(attachment.storage_key);
+
+      if (!object) {
+        await deleteObjects(env, writtenKeys).catch(() => {});
+
+        return badRequest('attachment not found');
+      }
+
+      const newId = crypto.randomUUID();
+      const storageKey = `attachments/${targetId}/${newId}`;
+
+      await env.ATTACHMENTS.put(storageKey, object.body, {
+        httpMetadata: { contentType: attachment.content_type },
+      });
+      writtenKeys.push(storageKey);
+
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO attachments
+             (id, ${targetColumn}, filename, content_type, size_bytes, storage_key)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        ).bind(
           newId,
           targetId,
           attachment.filename,
           attachment.content_type,
           object.size,
           storageKey,
-        )
-        .run();
-    } catch (error) {
-      await env.ATTACHMENTS.delete(storageKey).catch(() => {});
+        ),
+      );
 
-      throw error;
+      replacements.set(id, newId);
     }
+  } catch (error) {
+    await deleteObjects(env, writtenKeys).catch(() => {});
 
-    replacements.set(id, newId);
+    throw error;
   }
 
   const rewrite = (html: string) =>
@@ -168,6 +192,8 @@ export async function copyAttachments(
   return {
     bodyHtml: rewrite(bodyHtml),
     bodySource: rewrite(bodySource),
+    writtenKeys,
+    statements,
   };
 }
 
@@ -289,7 +315,7 @@ export async function uploadAttachment(
     filename: string;
     content_type: string;
     content_id: string | null;
-    storage_key: string;
+    size_bytes: number;
   }> = [];
 
   if (hasMessage) {
@@ -305,7 +331,7 @@ export async function uploadAttachment(
     }
 
     const { results } = await env.DB.prepare(
-      `SELECT id, filename, content_type, content_id, storage_key
+      `SELECT id, filename, content_type, content_id, size_bytes
        FROM attachments WHERE message_id = ?`,
     )
       .bind(messageOwnerId)
@@ -324,7 +350,7 @@ export async function uploadAttachment(
     }
 
     const { results } = await env.DB.prepare(
-      `SELECT id, filename, content_type, content_id, storage_key
+      `SELECT id, filename, content_type, content_id, size_bytes
        FROM attachments WHERE template_id = ?`,
     )
       .bind(templateOwnerId)
@@ -346,44 +372,32 @@ export async function uploadAttachment(
   const ownerColumn = hasMessage ? 'message_id' : 'template_id';
   const ownerId = hasMessage ? messageOwnerId : templateOwnerId;
   const storageKey = `attachments/${ownerId}/${id}`;
-  const content = await file.arrayBuffer();
-  const attachments: MimeAttachment[] = [];
-
-  for (const row of existing) {
-    const object = await env.ATTACHMENTS.get(row.storage_key);
-
-    if (!object) {
-      continue;
-    }
-    const content = await object.arrayBuffer();
-
-    if (row.content_id) {
-      attachments.push({
-        disposition: 'inline',
-        contentId: row.content_id,
-        filename: row.filename,
-        type: row.content_type,
-        content,
-      });
-    } else {
-      attachments.push({
-        disposition: 'attachment',
-        filename: row.filename,
-        type: row.content_type,
-        content,
-      });
-    }
-  }
+  const attachments: MimeAttachmentSize[] = existing.map(row =>
+    row.content_id
+      ? {
+          disposition: 'inline',
+          contentId: row.content_id,
+          filename: row.filename,
+          type: row.content_type,
+          sizeBytes: row.size_bytes,
+        }
+      : {
+          disposition: 'attachment',
+          filename: row.filename,
+          type: row.content_type,
+          sizeBytes: row.size_bytes,
+        },
+  );
 
   attachments.push({
     filename: file.name,
     type: file.type,
-    content,
+    sizeBytes: file.size,
     disposition: 'inline',
     contentId: id,
   });
 
-  const raw = buildRawMessage({
+  const estimatedBytes = estimateRawMessageBytes({
     from: user.email,
     to: user.email,
     subject,
@@ -392,9 +406,11 @@ export async function uploadAttachment(
     attachments,
   });
 
-  if (new TextEncoder().encode(raw).length > EMAIL_MAX_BYTES) {
+  if (estimatedBytes > EMAIL_MAX_BYTES) {
     return jsonError('message too large', 413);
   }
+
+  const content = await file.arrayBuffer();
 
   await env.ATTACHMENTS.put(storageKey, content, {
     httpMetadata: { contentType: file.type },

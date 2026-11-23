@@ -22,6 +22,7 @@ import {
 import {
   createTemplate,
   deleteTemplate,
+  getTemplate,
   importTemplate,
   listTemplates,
   updateTemplate,
@@ -195,6 +196,12 @@ const ROUTES: Route[] = [
     method: 'POST',
     pattern: '/api/templates/import',
     handler: ({ env, request, user }) => importTemplate(env, request, user.id),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/templates/:id',
+    handler: ({ env, params, user }) =>
+      getTemplate(env, param(params, 'id'), user.id),
   },
   {
     method: 'PUT',

@@ -125,3 +125,66 @@ test('模板上传使用纯文本计算 MIME 上限', async () => {
 
   expect(response.status).toBe(413);
 });
+
+test('上传图片按 D1 size_bytes 累加已有附件预算，不读取 R2 历史对象', async () => {
+  const form = new FormData();
+
+  form.append('messageId', 'draft-1');
+  form.append('text', 'hello');
+  form.append('html', '<p><img src="/api/attachments/a1"></p>');
+  form.append('subject', 'Subject');
+  form.append('sourceIds', JSON.stringify(['a1']));
+
+  form.append(
+    'file',
+    new File([new Uint8Array([1, 2, 3])], 'second.png', {
+      type: 'image/png',
+    }),
+  );
+
+  let r2GetCalls = 0;
+
+  const env = {
+    DB: {
+      prepare: (sql: string) => ({
+        bind: () => ({
+          first: async () =>
+            sql.includes('FROM messages') ? { id: 'draft-1' } : null,
+          all: async () => ({
+            results: [
+              {
+                id: 'a1',
+                filename: 'first.png',
+                content_type: 'image/png',
+                content_id: 'a1',
+                size_bytes: EMAIL_MAX_BYTES,
+              },
+            ],
+          }),
+          run: async () => ({ meta: { changes: 1 } }),
+        }),
+      }),
+    },
+    ATTACHMENTS: {
+      get: async () => {
+        r2GetCalls += 1;
+
+        return null;
+      },
+      put: async () => {},
+      delete: async () => {},
+    },
+  } as unknown as Env;
+
+  const response = await uploadAttachment(
+    env,
+    new Request('http://localhost/api/attachments', {
+      method: 'POST',
+      body: form,
+    }),
+    { id: 'user-1', email: 'me@example.com' },
+  );
+
+  expect(response.status).toBe(413);
+  expect(r2GetCalls).toBe(0);
+});

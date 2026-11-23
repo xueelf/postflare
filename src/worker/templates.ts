@@ -69,7 +69,7 @@ export function parseTemplatePayload(payload: {
     payload.name.trim(),
     payload.subject.trim(),
     payload.body_html.trim(),
-    payload.body_source.trim(),
+    payload.body_source,
     pruneIds,
   );
 }
@@ -106,7 +106,7 @@ async function templateAttachments(
 }
 
 async function deleteTemplateData(env: Env, id: string): Promise<void> {
-  // 先删 R2 对象，再删数据库行；R2 失败时元数据还在，可以重试
+  // 先删 R2 对象，再删数据库行，R2 失败时元数据还在，可以重试
   const attachments = await templateAttachments(env, id);
 
   await deleteObjects(
@@ -173,6 +173,26 @@ export async function listTemplates(
   return Response.json(results);
 }
 
+export async function getTemplate(
+  env: Env,
+  id: string,
+  userId: string,
+): Promise<Response> {
+  const template = await env.DB.prepare(
+    `SELECT id, name, subject, body_html, body_source, updated_at
+     FROM templates
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(id, userId)
+    .first();
+
+  if (!template) {
+    return notFound();
+  }
+
+  return Response.json(template);
+}
+
 async function parseTemplateImport(
   request: Request,
 ): Promise<TemplatePayload | Response> {
@@ -200,7 +220,7 @@ async function parseTemplateImport(
     return jsonError('template file too large', 413);
   }
 
-  const source = (await file.text()).trim();
+  const source = await file.text();
 
   return createTemplatePayload(name.trim(), name.trim(), body.trim(), source);
 }
@@ -222,6 +242,26 @@ export function templateRowTooLarge(
   ]);
 }
 
+function prepareInsertTemplate(
+  env: Env,
+  id: string,
+  userId: string,
+  payload: TemplatePayload,
+): D1PreparedStatement {
+  return env.DB.prepare(
+    `INSERT INTO templates (
+       id, user_id, name, subject, body_html, body_source
+     ) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    id,
+    userId,
+    payload.name,
+    payload.subject,
+    payload.body_html,
+    payload.body_source,
+  );
+}
+
 async function insertTemplate(
   env: Env,
   userId: string,
@@ -232,20 +272,7 @@ async function insertTemplate(
     return jsonError('template too large', 413);
   }
 
-  await env.DB.prepare(
-    `INSERT INTO templates (
-       id, user_id, name, subject, body_html, body_source
-     ) VALUES (?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      id,
-      userId,
-      payload.name,
-      payload.subject,
-      payload.body_html,
-      payload.body_source,
-    )
-    .run();
+  await prepareInsertTemplate(env, id, userId, payload).run();
 
   return id;
 }
@@ -291,44 +318,43 @@ export async function createTemplate(
   }
 
   const id = crypto.randomUUID();
-  const inserted = await insertTemplate(env, userId, parsed, id);
+  const copied = await copyAttachments(
+    env,
+    userId,
+    { templateId: id },
+    parsed.body_html,
+    parsed.body_source,
+  );
 
-  if (inserted instanceof Response) {
-    return inserted;
+  if (copied instanceof Response) {
+    return copied;
   }
 
+  const finalPayload: TemplatePayload = {
+    ...parsed,
+    body_html: copied.bodyHtml,
+    body_source: copied.bodySource,
+  };
+
+  if (templateRowTooLarge(id, userId, finalPayload)) {
+    await deleteObjects(env, copied.writtenKeys).catch(cleanupError => {
+      console.error(
+        'failed to delete oversized template objects',
+        cleanupError,
+      );
+    });
+
+    return jsonError('template too large', 413);
+  }
+
+  const insertStatement = prepareInsertTemplate(env, id, userId, finalPayload);
+
   try {
-    const copied = await copyAttachments(
-      env,
-      userId,
-      { templateId: id },
-      parsed.body_html,
-      parsed.body_source,
-    );
-
-    if (copied instanceof Response) {
-      try {
-        await deleteTemplateData(env, id);
-      } catch (error) {
-        console.error('failed to clean up template after copy error', error);
-      }
-
-      return copied;
-    }
-
-    if (
-      copied.bodyHtml !== parsed.body_html ||
-      copied.bodySource !== parsed.body_source
-    ) {
-      await env.DB.prepare(
-        `UPDATE templates SET body_html = ?, body_source = ?
-         WHERE id = ? AND user_id = ?`,
-      )
-        .bind(copied.bodyHtml, copied.bodySource, id, userId)
-        .run();
-    }
+    await env.DB.batch([insertStatement, ...copied.statements]);
   } catch (error) {
-    await deleteTemplateData(env, id).catch(() => {});
+    await deleteObjects(env, copied.writtenKeys).catch(cleanupError => {
+      console.error('failed to delete partial template objects', cleanupError);
+    });
 
     throw error;
   }
@@ -377,7 +403,9 @@ export async function updateTemplate(
     parsed.body_html,
     parsed.body_source,
     parsed.pruneIds,
-  );
+  ).catch(error => {
+    console.error('failed to prune template images', error);
+  });
 
   return Response.json({ ok: true });
 }

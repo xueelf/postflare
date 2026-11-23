@@ -212,12 +212,48 @@ export async function storeMessage({
 export function normalizeMessageId(
   value: string | null | undefined,
 ): string | null {
-  const trimmed = value?.trim();
+  const normalized = value?.trim().replace(/^</, '').replace(/>$/, '').trim();
 
-  if (!trimmed) {
-    return null;
+  return normalized || null;
+}
+
+function decodeNumericEntity(code: number, raw: string): string {
+  if (
+    !Number.isFinite(code) ||
+    code <= 0 ||
+    code > 0x10ffff ||
+    (code >= 0xd800 && code <= 0xdfff)
+  ) {
+    return raw;
   }
-  return trimmed.replace(/^</, '').replace(/>$/, '');
+  return String.fromCodePoint(code);
+}
+
+/**
+ * 从编译后的邮件 HTML 提取可搜索的纯文本，移除样式、脚本、头部与注释。
+ */
+export function htmlToPlainText(value: string): string {
+  const stripped = value
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, ' ')
+    .replace(
+      /<(?:style|script|title|head)\b[^>]*>[\s\S]*?(?:<\/(?:style|script|title|head)\s*>|$)/gi,
+      ' ',
+    )
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (raw, hex: string) =>
+      decodeNumericEntity(Number.parseInt(hex, 16), raw),
+    )
+    .replace(/&#([0-9]+);/g, (raw, dec: string) =>
+      decodeNumericEntity(Number.parseInt(dec, 10), raw),
+    );
+
+  return stripped.replace(/\s+/g, ' ').trim();
 }
 
 /**

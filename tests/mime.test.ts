@@ -2,7 +2,11 @@ import { expect, test } from 'bun:test';
 
 import PostalMime from 'postal-mime';
 
-import { buildRawMessage } from '#/worker/mime';
+import {
+  buildRawMessage,
+  estimateRawMessageBytes,
+  wrappedBase64Bytes,
+} from '#/worker/mime';
 
 test('buildRawMessage 生成带内联图片的 multipart/related', () => {
   const raw = buildRawMessage({
@@ -83,4 +87,54 @@ test('buildRawMessage 折叠长主题并折行 base64 正文', async () => {
 
   expect(parsed.subject).toBe(subject);
   expect(parsed.text).toBe(text);
+});
+
+test('wrappedBase64Bytes 与 estimateRawMessageBytes 按字节数精确计算 MIME 体积', () => {
+  const encoder = new TextEncoder();
+
+  for (const size of [0, 1, 2, 3, 56, 57, 58, 1024, 65537]) {
+    const content = new Uint8Array(size).buffer;
+    const raw = buildRawMessage({
+      from: 'me@example.com',
+      to: 'a@example.com',
+      subject: '预算校验',
+      text: 'Hello',
+      html: '<p>Hello</p>',
+      attachments: [
+        {
+          disposition: 'inline',
+          contentId: 'img-1',
+          filename: 'photo.png',
+          type: 'image/png',
+          content,
+        },
+      ],
+    });
+    const estimated = estimateRawMessageBytes({
+      from: 'me@example.com',
+      to: 'a@example.com',
+      subject: '预算校验',
+      text: 'Hello',
+      html: '<p>Hello</p>',
+      attachments: [
+        {
+          disposition: 'inline',
+          contentId: 'img-1',
+          filename: 'photo.png',
+          type: 'image/png',
+          sizeBytes: size,
+        },
+      ],
+    });
+
+    // boundary 随机长度可能有 1–2 字节差异，整体差值不超过 16 字节
+    expect(
+      Math.abs(encoder.encode(raw).length - estimated),
+    ).toBeLessThanOrEqual(16);
+  }
+
+  expect(wrappedBase64Bytes(0)).toBe(0);
+  expect(wrappedBase64Bytes(3)).toBe(4);
+  expect(wrappedBase64Bytes(57)).toBe(76);
+  expect(wrappedBase64Bytes(58)).toBe(82);
 });
